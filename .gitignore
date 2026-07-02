@@ -23,8 +23,8 @@ instance/
 .flaskenv
 
 # Database
-*.db
-*.sqlite3
+# *.db
+# *.sqlite3
 
 # Excel Files (Generated Data)
 attendance_data.xlsx
