@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ session.csrf_token }}">
+    <script>
+        (function() {
+            const originalFetch = window.fetch;
+            window.fetch = async function(url, options = {}) {
+                if (options.method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(options.method.toUpperCase())) {
+                    options.headers = options.headers || {};
+                    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                    if (token) {
+                        options.headers['X-CSRFToken'] = token;
+                    }
+                }
+                return originalFetch(url, options);
+            };
+        })();
+    </script>
+    <title>Admin Dashboard - AttendanceMS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #f0f2f6;
+            --card-bg: #ffffff;
+            --card-border: #dde3ed;
+            --accent: #1d6fa6;
+            --accent-light: #3b82f6;
+            --accent-glow: rgba(29, 111, 166, 0.15);
+            --green: #059669;
+            --green-glow: rgba(5, 150, 105, 0.15);
+            --amber: #d97706;
+            --amber-glow: rgba(217, 119, 6, 0.15);
+            --red: #dc2626;
+            --text-light: #111827;
+            --text-muted: #6b7280;
+            --sidebar-w: 240px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-light);
+            min-height: 100vh;
+            display: flex;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: var(--sidebar-w);
+            background: #0d1b2a;
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 100;
+        }
+
+        .sidebar-brand {
+            padding: 30px 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .brand-icon {
+            width: 32px;
+            height: 32px;
+            background: var(--accent);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .brand-icon svg {
+            width: 16px;
+            height: 16px;
+            fill: none;
+            stroke: white;
+            stroke-width: 2;
+        }
+
+        .brand-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: -0.5px;
+        }
+
+        .sidebar-nav {
+            padding: 24px 12px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: rgba(255, 255, 255, 0.5);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 14px;
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .nav-link.active {
+            background: rgba(29, 111, 166, 0.25);
+            border-left: 3px solid var(--accent);
+        }
+
+        .sidebar-footer {
+            padding: 24px 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .btn-logout {
+            width: 100%;
+            padding: 10px;
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            color: #fca5a5;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-logout:hover {
+            background: rgba(239, 68, 68, 0.25);
+        }
+
+        /* Workspace */
+        .workspace {
+            margin-left: var(--sidebar-w);
+            flex: 1;
+            padding: 40px;
+            width: calc(100% - var(--sidebar-w));
+        }
+
+        /* Header & Filters */
+        .header {
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .header-title h2 {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .header-title p {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-top: 2px;
+        }
+
+        .filter-panel {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 16px 20px;
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .filter-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .filter-control {
+            background: #f8fafc;
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: var(--text-light);
+            font-family: inherit;
+            font-size: 13px;
+            outline: none;
+            min-width: 140px;
+            transition: all 0.3s;
+        }
+
+        .filter-control:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px var(--accent-glow);
+            background: #ffffff;
+        }
+
+        .filter-control option {
+            background: #ffffff;
+            color: var(--text-light);
+        }
+
+        .btn-filter-reset {
+            padding: 8px 16px;
+            background: #f1f5f9;
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            color: var(--text-light);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            align-self: flex-end;
+            transition: all 0.3s;
+        }
+
+        .btn-filter-reset:hover {
+            background: #e2e8f0;
+        }
+
+        /* KPI Cards Grid */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 1200px) {
+            .kpi-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        @media (max-width: 768px) {
+            .kpi-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .kpi-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+            transition: transform 0.3s;
+        }
+
+        .kpi-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .kpi-icon-box {
+            width: 46px;
+            height: 46px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .icon-blue { background: rgba(29, 111, 166, 0.08); color: var(--accent); }
+        .icon-green { background: rgba(16, 185, 129, 0.08); color: var(--green); }
+        .icon-amber { background: rgba(245, 158, 11, 0.08); color: var(--amber); }
+        .icon-red { background: rgba(239, 68, 68, 0.08); color: var(--red); }
+        .icon-indigo { background: rgba(99, 102, 241, 0.08); color: #4f46e5; }
+
+        .kpi-details {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .kpi-val {
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .kpi-lbl {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 2px;
+        }
+
+        /* Charts Grid */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 992px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .chart-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+            height: 340px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-header {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chart-container {
+            flex: 1;
+            position: relative;
+            min-height: 0;
+        }
+
+        /* Panels */
+        .panel {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Tables & List Cards */
+        .list-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 28px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+            margin-bottom: 24px;
+        }
+
+        .list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .list-title {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .action-btns {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-outline { background: #ffffff; color: var(--text-light); border: 1px solid var(--card-border); }
+        .btn-outline:hover { background: #f8fafc; border-color: var(--accent); color: var(--accent); }
+        .btn-danger { background: rgba(239, 68, 68, 0.08); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.15); }
+        .btn-danger:hover { background: rgba(239, 68, 68, 0.2); }
+        .btn-success { background: rgba(16, 185, 129, 0.08); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.15); }
+        .btn-success:hover { background: rgba(16, 185, 129, 0.2); }
+
+        /* Tables */
+        .table-scroll {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th {
+            padding: 12px 16px;
+            background: #f8fafc;
+            border-bottom: 1px solid var(--card-border);
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 14px 16px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 14px;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+
+        tbody tr:hover td {
+            background: #f8fafc;
+        }
+
+        .id-badge {
+            font-family: monospace;
+            font-weight: 700;
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid var(--card-border);
+            color: var(--text-light);
+        }
+
+        /* Status Pills */
+        .status-pill {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+        .sp-present { background: rgba(16, 185, 129, 0.08); color: var(--green); }
+        .sp-late { background: rgba(245, 158, 11, 0.08); color: var(--amber); }
+        .sp-absent { background: rgba(239, 68, 68, 0.08); color: var(--red); }
+        .sp-loggedin { background: rgba(29, 111, 166, 0.08); color: var(--accent); }
+        .sp-onleave { background: rgba(99, 102, 241, 0.08); color: #4f46e5; }
+
+        .sp-pending { background: rgba(245, 158, 11, 0.08); color: var(--amber); }
+        .sp-approved { background: rgba(16, 185, 129, 0.08); color: var(--green); }
+        .sp-rejected { background: rgba(239, 68, 68, 0.08); color: var(--red); }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        /* Form styling */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        @media (max-width: 600px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .form-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .form-input {
+            background: #f8fafc;
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: var(--text-light);
+            font-family: inherit;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.3s;
+        }
+        .form-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px var(--accent-glow);
+            background: #ffffff;
+        }
+
+        /* Modals */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-box {
+            background: #ffffff;
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            width: 480px;
+            max-width: 90vw;
+            padding: 32px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+            animation: modalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            color: var(--text-light);
+        }
+        @keyframes modalIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .modal-title { font-size: 20px; font-weight: 700; margin-bottom: 12px; }
+        .modal-body { margin-top: 16px; }
+        .modal-footer { display: flex; gap: 12px; margin-top: 24px; justify-content: flex-end; }
+        .detail-item { margin-bottom: 12px; display: flex; flex-direction: column; gap: 2px; }
+        .detail-lbl { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .detail-val { font-size: 14px; font-weight: 500; }
+
+        /* Toast Notifications */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: #ffffff;
+            border-left: 4px solid var(--accent);
+            border-radius: 8px;
+            padding: 16px 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            z-index: 2000;
+            transform: translateY(120px);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            max-width: 320px;
+            color: var(--text-light);
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast.success { border-left-color: var(--green); }
+        .toast.error { border-left-color: var(--red); }
+        .toast-title { font-weight: 700; font-size: 14px; }
+        .toast-msg { font-size: 13px; color: var(--text-muted); }
+    </style>
+</head>
+<body>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-icon">
+                <svg viewBox="0 0 24 24">
+                    <rect x="3" y="4" width="18" height="18" rx="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+            </div>
+            <span class="brand-name">AttendanceMS</span>
+        </div>
+
+        <nav class="sidebar-nav">
+            <a href="#" class="nav-link active" onclick="switchPanel('overview', this)">
+                <span>📊</span> Overview
+            </a>
+            <a href="#" class="nav-link" onclick="switchPanel('records', this)">
+                <span>📋</span> Attendance Records
+            </a>
+            <a href="#" class="nav-link" onclick="switchPanel('leaves', this)">
+                <span>✉️</span> Leave Requests
+            </a>
+            <a href="#" class="nav-link" onclick="switchPanel('interns', this)">
+                <span>👥</span> Manage Students
+            </a>
+            <a href="/change-password" class="nav-link">
+                <span>🔑</span> Change Password
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <button class="btn-logout" onclick="logout()">Sign Out</button>
+        </div>
+    </aside>
+
+    <!-- WORKSPACE -->
+    <main class="workspace">
+        <!-- HEADER -->
+        <header class="header">
+            <div class="header-title">
+                <h2 id="panelHeaderTitle">Dashboard Overview</h2>
+                <p id="panelHeaderSub">Analytics insights and filtering</p>
+            </div>
+        </header>
+
+        <!-- GLOBAL FILTERS (For Overview & Records) -->
+        <div class="filter-panel" id="globalFilters">
+            <div class="filter-group">
+                <span class="filter-label">Internship Domain</span>
+                <select class="filter-control" id="fDomain" onchange="triggerFilterUpdate()">
+                    <option value="">All Domains</option>
+                    <option value="Data Analyst Intern">Data Analyst</option>
+                    <option value="HR Intern">HR</option>
+                    <option value="Cyber Security Intern">Cyber Security</option>
+                    <option value="AI/ML Intern">AI/ML</option>
+                    <option value="Web Development Intern">Web Development</option>
+                    <option value="App Development Intern">App Development</option>
+                    <option value="UI/UX Intern">UI/UX</option>
+                    <option value="Marketing Intern">Marketing</option>
+                    <option value="Finance Intern">Finance</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <span class="filter-label">Date Range</span>
+                <select class="filter-control" id="fDateRange" onchange="handleDateRangeChange()">
+                    <option value="today">Today</option>
+                    <option value="yesterday">Yesterday</option>
+                    <option value="7days">Last 7 Days</option>
+                    <option value="30days">Last 30 Days</option>
+                    <option value="custom">Custom Range</option>
+                </select>
+            </div>
+
+            <div class="filter-group" id="customDateGroup" style="display: none;">
+                <span class="filter-label">Start / End Date</span>
+                <div style="display: flex; gap: 8px;">
+                    <input type="date" class="filter-control" style="min-width: 120px;" id="fStartDate" onchange="triggerFilterUpdate()">
+                    <input type="date" class="filter-control" style="min-width: 120px;" id="fEndDate" onchange="triggerFilterUpdate()">
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <span class="filter-label">Attendance Status</span>
+                <select class="filter-control" id="fStatus" onchange="triggerFilterUpdate()">
+                    <option value="">All Statuses</option>
+                    <option value="Present">Present</option>
+                    <option value="Late">Late</option>
+                    <option value="Absent">Absent</option>
+                    <option value="Logged In">Checked In Only</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <span class="filter-label">Search Student</span>
+                <input type="text" class="filter-control" id="fName" placeholder="Search by name..." oninput="triggerFilterUpdate()">
+            </div>
+
+            <div class="filter-group">
+                <span class="filter-label">Search ID</span>
+                <input type="text" class="filter-control" id="fId" placeholder="Search by ID..." oninput="triggerFilterUpdate()">
+            </div>
+
+            <button class="btn-filter-reset" onclick="resetFilters()">Reset</button>
+        </div>
+
+        <!-- PANEL: OVERVIEW -->
+        <div class="panel active" id="panel-overview">
+            <!-- KPIs -->
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-icon-box icon-blue">👥</div>
+                    <div class="kpi-details">
+                        <span class="kpi-val" id="kpiTotalUsers">0</span>
+                        <span class="kpi-lbl">Total Registered</span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon-box icon-green">✓</div>
+                    <div class="kpi-details">
+                        <span class="kpi-val" id="kpiPresent">0</span>
+                        <span class="kpi-lbl">Present Today</span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon-box icon-red">✗</div>
+                    <div class="kpi-details">
+                        <span class="kpi-val" id="kpiAbsent">0</span>
+                        <span class="kpi-lbl">Absent Today</span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon-box icon-amber">⏱️</div>
+                    <div class="kpi-details">
+                        <span class="kpi-val" id="kpiLate">0</span>
+                        <span class="kpi-lbl">Late Arrivals</span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon-box icon-indigo">⏳</div>
+                    <div class="kpi-details">
+                        <span class="kpi-val" id="kpiHours">0.0h</span>
+                        <span class="kpi-lbl">Avg Working Hrs</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CHARTS -->
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-header">📈 Domain-wise Distribution</div>
+                    <div class="chart-container">
+                        <canvas id="chartDomain"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-header">📅 Attendance Trends (Last 7 Days)</div>
+                    <div class="chart-container">
+                        <canvas id="chartTrends"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card" style="grid-column: 1 / -1; height: 360px;">
+                    <div class="chart-header">⏱️ Daily Check-In Timeline</div>
+                    <div class="chart-container">
+                        <canvas id="chartTimeline"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL: ATTENDANCE RECORDS -->
+        <div class="panel" id="panel-records">
+            <div class="list-card">
+                <div class="list-header">
+                    <div class="list-title">Attendance History Logs</div>
+                    <div class="action-btns">
+                        <button class="btn btn-outline" onclick="exportExcel()">📥 Export Excel</button>
+                        <button class="btn btn-outline" onclick="exportPowerBI()">📥 Power BI CSV</button>
+                    </div>
+                </div>
+
+                <div class="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Intern ID</th>
+                                <th>Name</th>
+                                <th>Domain</th>
+                                <th>Check In</th>
+                                <th>Check Out</th>
+                                <th>Working Hours</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendanceRecordsBody">
+                            <tr>
+                                <td colspan="8" class="empty-state">No attendance records found for current filters.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL: LEAVE REQUESTS -->
+        <div class="panel" id="panel-leaves">
+            <div class="list-card">
+                <div class="list-header">
+                    <div class="list-title">Pending Leave Requests</div>
+                    <button class="btn btn-outline" onclick="loadAllLeaves()">Refresh</button>
+                </div>
+                <div class="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Leave ID</th>
+                                <th>Intern ID</th>
+                                <th>Name</th>
+                                <th>Type</th>
+                                <th>From Date</th>
+                                <th>To Date</th>
+                                <th>Days</th>
+                                <th>Reason</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pendingLeavesBody">
+                            <tr>
+                                <td colspan="9" class="empty-state">No pending leave requests.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="list-card">
+                <div class="list-header">
+                    <div class="list-title">Reviewed Leave History</div>
+                </div>
+                <div class="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Leave ID</th>
+                                <th>Intern ID</th>
+                                <th>Name</th>
+                                <th>Type</th>
+                                <th>From Date</th>
+                                <th>To Date</th>
+                                <th>Days</th>
+                                <th>Status</th>
+                                <th>Admin Remarks</th>
+                                <th>Reviewed On</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reviewedLeavesBody">
+                            <tr>
+                                <td colspan="10" class="empty-state">No reviewed applications in history.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL: MANAGE STUDENTS -->
+        <div class="panel" id="panel-interns">
+            <div class="list-card">
+                <div class="list-title" style="margin-bottom: 20px;">Register New Student / Intern</div>
+                <form id="addStudentForm" onsubmit="handleAddStudent(event)">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Intern / Student ID</label>
+                            <input type="text" class="form-input" id="stId" placeholder="e.g. INT101" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Full Name</label>
+                            <input type="text" class="form-input" id="stName" placeholder="e.g. Alice Smith" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Email Address</label>
+                            <input type="email" class="form-input" id="stEmail" placeholder="e.g. alice@company.com" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Department / Stream</label>
+                            <input type="text" class="form-input" id="stDept" placeholder="e.g. Data Analytics" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Register Student</button>
+                </form>
+            </div>
+
+            <div class="list-card">
+                <div class="list-header">
+                    <div class="list-title">All Registered Students</div>
+                    <button class="btn btn-outline" onclick="loadAllStudents()">Refresh</button>
+                </div>
+                <div class="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Intern ID</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Department</th>
+                                <th>Created At</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="studentsTableBody">
+                            <tr>
+                                <td colspan="6" class="empty-state">No registered students found.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- LEAVE REVIEW MODAL -->
+    <div class="modal-overlay" id="reviewLeaveModal">
+        <div class="modal-box">
+            <h3 class="modal-title">Review Leave Application</h3>
+            <div class="modal-body">
+                <input type="hidden" id="revLeaveId">
+                <div class="detail-item">
+                    <span class="detail-lbl">Intern ID & Name</span>
+                    <span class="detail-val" id="revInternInfo">—</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="detail-item">
+                        <span class="detail-lbl">Leave Type</span>
+                        <span class="detail-val" id="revType">—</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-lbl">Duration</span>
+                        <span class="detail-val" id="revDays">—</span>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div class="detail-item">
+                        <span class="detail-lbl">From Date</span>
+                        <span class="detail-val" id="revFrom">—</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-lbl">To Date</span>
+                        <span class="detail-val" id="revTo">—</span>
+                    </div>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-lbl">Reason</span>
+                    <span class="detail-val" style="background: rgba(0,0,0,0.02); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--card-border);" id="revReason">—</span>
+                </div>
+                <div class="form-group" style="margin-top: 16px;">
+                    <label class="form-label">Admin Remarks</label>
+                    <textarea class="form-input" id="revRemarks" rows="2" placeholder="Write reason for approval/rejection..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeLeaveModal()">Cancel</button>
+                <button class="btn btn-danger" onclick="submitLeaveReview('Rejected')">Reject</button>
+                <button class="btn btn-success" onclick="submitLeaveReview('Approved')">Approve</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toastBox">
+        <div class="toast-title" id="toastTitle">Notification</div>
+        <div class="toast-msg" id="toastMsg">Details.</div>
+    </div>
+
+    <script>
+        // Charts Objects
+        let chartDomainObj = null;
+        let chartTrendsObj = null;
+        let chartTimelineObj = null;
+
+        // INIT
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set end date as today and start date as 7 days ago by default
+            const today = new Date().toISOString().split('T')[0];
+            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            document.getElementById('fStartDate').value = sevenDaysAgo;
+            document.getElementById('fEndDate').value = today;
+
+            // Load initial view
+            triggerFilterUpdate();
+            checkSession();
+        });
+
+        async function checkSession() {
+            try {
+                const res = await fetch('/api/auth/me');
+                const data = await res.json();
+                if (!data.logged_in || data.role !== 'admin') {
+                    window.location.href = '/login';
+                }
+            } catch(e) {
+                window.location.href = '/login';
+            }
+        }
+
+        function notify(title, msg, type = 'success') {
+            const toast = document.getElementById('toastBox');
+            document.getElementById('toastTitle').innerText = title;
+            document.getElementById('toastMsg').innerText = msg;
+            toast.className = `toast show ${type}`;
+            clearTimeout(toast._t);
+            toast._t = setTimeout(() => toast.classList.remove('show'), 4000);
+        }
+
+        function switchPanel(name, btn) {
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+            
+            document.getElementById(`panel-${name}`).classList.add('active');
+            if (btn) btn.classList.add('active');
+
+            const title = document.getElementById('panelHeaderTitle');
+            const sub = document.getElementById('panelHeaderSub');
+            const globalFilters = document.getElementById('globalFilters');
+
+            if (name === 'overview') {
+                title.innerText = "Dashboard Overview";
+                sub.innerText = "Analytics insights and filtering";
+                globalFilters.style.display = "flex";
+                triggerFilterUpdate();
+            } else if (name === 'records') {
+                title.innerText = "Attendance Records";
+                sub.innerText = "View historical logs and export reports";
+                globalFilters.style.display = "flex";
+                triggerFilterUpdate();
+            } else if (name === 'leaves') {
+                title.innerText = "Leave Applications";
+                sub.innerText = "Approve and reject student leave requests";
+                globalFilters.style.display = "none";
+                loadAllLeaves();
+            } else if (name === 'interns') {
+                title.innerText = "Student Management";
+                sub.innerText = "Register new interns and delete student records";
+                globalFilters.style.display = "none";
+                loadAllStudents();
+            }
+        }
+
+        // Global Filters logic
+        function handleDateRangeChange() {
+            const dateRange = document.getElementById('fDateRange').value;
+            const customGroup = document.getElementById('customDateGroup');
+            customGroup.style.display = dateRange === 'custom' ? 'block' : 'none';
+            triggerFilterUpdate();
+        }
+
+        function getFilterQuery() {
+            const domain = document.getElementById('fDomain').value;
+            const dateRange = document.getElementById('fDateRange').value;
+            const startDate = document.getElementById('fStartDate').value;
+            const endDate = document.getElementById('fEndDate').value;
+            const status = document.getElementById('fStatus').value;
+            const name = document.getElementById('fName').value.trim();
+            const sid = document.getElementById('fId').value.trim();
+
+            let query = `?date_range=${dateRange}`;
+            if (domain) query += `&domain=${encodeURIComponent(domain)}`;
+            if (status) query += `&status=${encodeURIComponent(status)}`;
+            if (name) query += `&name=${encodeURIComponent(name)}`;
+            if (sid) query += `&id=${encodeURIComponent(sid)}`;
+            if (dateRange === 'custom') {
+                if (startDate) query += `&start_date=${startDate}`;
+                if (endDate) query += `&end_date=${endDate}`;
+            }
+            return query;
+        }
+
+        let filterTimeout = null;
+        function triggerFilterUpdate() {
+            clearTimeout(filterTimeout);
+            filterTimeout = setTimeout(() => {
+                const activePanel = document.querySelector('.panel.active');
+                if (activePanel.id === 'panel-overview') {
+                    loadOverviewStats();
+                } else if (activePanel.id === 'panel-records') {
+                    loadAttendanceRecords();
+                }
+            }, 300);
+        }
+
+        function resetFilters() {
+            document.getElementById('fDomain').value = "";
+            document.getElementById('fDateRange').value = "today";
+            document.getElementById('customDateGroup').style.display = "none";
+            document.getElementById('fStatus').value = "";
+            document.getElementById('fName').value = "";
+            document.getElementById('fId').value = "";
+            triggerFilterUpdate();
+        }
+
+        // Fetch Overview Stats
+        async function loadOverviewStats() {
+            try {
+                const query = getFilterQuery();
+                const response = await fetch(`/api/admin/stats${query}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    // Update KPIs
+                    document.getElementById('kpiTotalUsers').innerText = data.stats.total_users;
+                    document.getElementById('kpiPresent').innerText = data.stats.present_today;
+                    document.getElementById('kpiAbsent').innerText = data.stats.absent_today;
+                    document.getElementById('kpiLate').innerText = data.stats.late_today;
+                    document.getElementById('kpiHours').innerText = `${data.stats.avg_hours.toFixed(1)}h`;
+
+                    // Render Charts
+                    renderDomainChart(data.charts.domains);
+                    renderTrendsChart(data.charts.trends);
+                    renderTimelineChart(data.charts.timeline);
+                }
+            } catch(e) {
+                console.error(e);
+                notify('Error', 'Failed to load overview analytics.', 'error');
+            }
+        }
+
+        // Fetch Attendance Records
+        async function loadAttendanceRecords() {
+            try {
+                const query = getFilterQuery();
+                const response = await fetch(`/api/admin/attendance${query}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const tbody = document.getElementById('attendanceRecordsBody');
+                    if (data.records.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No attendance records found for current filters.</td></tr>';
+                        return;
+                    }
+
+                    tbody.innerHTML = data.records.map(r => {
+                        let statusClass = 'status-pill sp-loggedin';
+                        if (r.status === 'Present') statusClass = 'status-pill sp-present';
+                        else if (r.status === 'Late') statusClass = 'status-pill sp-late';
+                        else if (r.status === 'Absent') statusClass = 'status-pill sp-absent';
+                        else if (r.status === 'On Leave') statusClass = 'status-pill sp-onleave';
+
+                        return `
+                            <tr>
+                                <td style="font-family: monospace; font-size: 13px;">${r.date}</td>
+                                <td><span class="id-badge">${r.user_id}</span></td>
+                                <td style="font-weight: 500;">${r.name}</td>
+                                <td>${r.internship_domain || '—'}</td>
+                                <td>${r.check_in || '—'}</td>
+                                <td>${r.check_out || '—'}</td>
+                                <td style="font-weight: 500;">${r.working_hours ? `${r.working_hours.toFixed(2)} hrs` : '—'}</td>
+                                <td><span class="${statusClass}">${r.status}</span></td>
+                            </tr>
+                        `;
+                    }).join('');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        // CHARTS RENDER FUNCTIONS
+        function renderDomainChart(domainData) {
+            const ctx = document.getElementById('chartDomain').getContext('2d');
+            if (chartDomainObj) chartDomainObj.destroy();
+
+            const labels = Object.keys(domainData);
+            const counts = Object.values(domainData);
+
+            if (labels.length === 0) {
+                labels.push("No Data");
+                counts.push(1);
+            }
+
+            chartDomainObj = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: counts,
+                        backgroundColor: [
+                            '#1d6fa6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', 
+                            '#06b6d4', '#f43f5e', '#6366f1', '#6b7280'
+                        ],
+                        borderWidth: 1,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { color: '#4b5563', font: { family: 'Outfit', size: 11 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderTrendsChart(trendsData) {
+            const ctx = document.getElementById('chartTrends').getContext('2d');
+            if (chartTrendsObj) chartTrendsObj.destroy();
+
+            const dates = Object.keys(trendsData).sort();
+            const presentCounts = dates.map(d => trendsData[d].present);
+            const absentCounts = dates.map(d => trendsData[d].absent);
+            const lateCounts = dates.map(d => trendsData[d].late);
+
+            chartTrendsObj = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [
+                        {
+                            label: 'Present',
+                            data: presentCounts,
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.05)',
+                            tension: 0.3,
+                            fill: true
+                        },
+                        {
+                            label: 'Late',
+                            data: lateCounts,
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(245, 158, 11, 0.05)',
+                            tension: 0.3,
+                            fill: true
+                        },
+                        {
+                            label: 'Absent',
+                            data: absentCounts,
+                            borderColor: '#ef4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.05)',
+                            tension: 0.3,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { color: '#f3f4f6' }, ticks: { color: '#4b5563', font: { family: 'Outfit' } } },
+                        y: { grid: { color: '#f3f4f6' }, ticks: { color: '#4b5563', stepSize: 1, font: { family: 'Outfit' } } }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: { color: '#4b5563', font: { family: 'Outfit', size: 11 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderTimelineChart(timelineData) {
+            const ctx = document.getElementById('chartTimeline').getContext('2d');
+            if (chartTimelineObj) chartTimelineObj.destroy();
+
+            const times = Object.keys(timelineData).sort();
+            const counts = Object.values(timelineData);
+
+            chartTimelineObj = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: times,
+                    datasets: [{
+                        label: 'Check-ins',
+                        data: counts,
+                        backgroundColor: '#1d6fa6',
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#4b5563', font: { family: 'Outfit' } } },
+                        y: { grid: { color: '#f3f4f6' }, ticks: { color: '#4b5563', stepSize: 1, font: { family: 'Outfit' } } }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        // LEAVE MANAGEMENT
+        async function loadAllLeaves() {
+            try {
+                const response = await fetch('/api/admin/leaves');
+                const data = await response.json();
+
+                if (data.success) {
+                    const pendingBody = document.getElementById('pendingLeavesBody');
+                    const reviewedBody = document.getElementById('reviewedLeavesBody');
+
+                    const pending = data.leaves.filter(l => l.status === 'Pending');
+                    const reviewed = data.leaves.filter(l => l.status !== 'Pending');
+
+                    if (pending.length === 0) {
+                        pendingBody.innerHTML = '<tr><td colspan="9" class="empty-state">No pending leave requests.</td></tr>';
+                    } else {
+                        pendingBody.innerHTML = pending.map(l => `
+                            <tr>
+                                <td><span style="font-family: monospace; font-weight: 700;">${l.leave_id}</span></td>
+                                <td><span class="id-badge">${l.user_id}</span></td>
+                                <td style="font-weight: 500;">${l.name}</td>
+                                <td>${l.leave_type}</td>
+                                <td>${l.from_date}</td>
+                                <td>${l.to_date}</td>
+                                <td style="font-weight: 600;">${l.days}</td>
+                                <td style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">${l.reason}</td>
+                                <td><button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="openReviewModal('${l.leave_id}')">Review</button></td>
+                            </tr>
+                        `).join('');
+                    }
+
+                    if (reviewed.length === 0) {
+                        reviewedBody.innerHTML = '<tr><td colspan="10" class="empty-state">No reviewed applications in history.</td></tr>';
+                    } else {
+                        reviewedBody.innerHTML = reviewed.map(l => {
+                            let statusClass = 'status-pill sp-pending';
+                            if (l.status === 'Approved') statusClass = 'status-pill sp-approved';
+                            else if (l.status === 'Rejected') statusClass = 'status-pill sp-rejected';
+
+                            return `
+                                <tr>
+                                    <td><span style="font-family: monospace; font-weight: 700;">${l.leave_id}</span></td>
+                                    <td><span class="id-badge">${l.user_id}</span></td>
+                                    <td style="font-weight: 500;">${l.name}</td>
+                                    <td>${l.leave_type}</td>
+                                    <td>${l.from_date}</td>
+                                    <td>${l.to_date}</td>
+                                    <td style="font-weight: 600;">${l.days}</td>
+                                    <td><span class="${statusClass}">${l.status}</span></td>
+                                    <td style="color: var(--text-muted); font-size: 13px; max-width: 150px; overflow: hidden; text-overflow: ellipsis;">${l.remarks || '—'}</td>
+                                    <td style="font-size: 12px; color: var(--text-muted);">${l.reviewed_on || '—'}</td>
+                                </tr>
+                            `;
+                        }).join('');
+                    }
+                }
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        async function openReviewModal(lid) {
+            try {
+                const response = await fetch('/api/admin/leaves');
+                const data = await response.json();
+                const leave = data.leaves.find(x => x.leave_id === lid);
+                if (!leave) return;
+
+                document.getElementById('revLeaveId').value = lid;
+                document.getElementById('revInternInfo').innerText = `${leave.name} (${leave.user_id})`;
+                document.getElementById('revType').innerText = leave.leave_type;
+                document.getElementById('revDays').innerText = `${leave.days} Day(s)`;
+                document.getElementById('revFrom').innerText = leave.from_date;
+                document.getElementById('revTo').innerText = leave.to_date;
+                document.getElementById('revReason').innerText = leave.reason;
+                document.getElementById('revRemarks').value = "";
+
+                document.getElementById('reviewLeaveModal').style.display = 'flex';
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        function closeLeaveModal() {
+            document.getElementById('reviewLeaveModal').style.display = 'none';
+        }
+
+        async function submitLeaveReview(action) {
+            const leaveId = document.getElementById('revLeaveId').value;
+            const remarks = document.getElementById('revRemarks').value.trim();
+
+            try {
+                const response = await fetch('/api/admin/leave/review', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ leave_id: leaveId, action, remarks })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    notify('Review Submitted', `Leave request was ${action.toLowerCase()} successfully.`, 'success');
+                    closeLeaveModal();
+                    loadAllLeaves();
+                } else {
+                    notify('Error', data.message, 'error');
+                }
+            } catch(e) {
+                console.error(e);
+                notify('Error', 'Server connection error.', 'error');
+            }
+        }
+
+        // STUDENT MANAGEMENT
+        async function loadAllStudents() {
+            try {
+                const response = await fetch('/api/admin/interns');
+                const data = await response.json();
+
+                if (data.success) {
+                    const tbody = document.getElementById('studentsTableBody');
+                    if (data.interns.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No registered students found.</td></tr>';
+                        return;
+                    }
+
+                    tbody.innerHTML = data.interns.map(s => `
+                        <tr>
+                            <td><span class="id-badge">${s.id}</span></td>
+                            <td style="font-weight: 500;">${s.name}</td>
+                            <td>${s.email}</td>
+                            <td>${s.department || '—'}</td>
+                            <td style="font-size: 13px; color: var(--text-muted);">${s.created_at}</td>
+                            <td><button class="btn btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="deleteStudent('${s.id}')">Remove</button></td>
+                        </tr>
+                    `).join('');
+                }
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        async function handleAddStudent(event) {
+            event.preventDefault();
+            const sid = document.getElementById('stId').value.trim();
+            const name = document.getElementById('stName').value.trim();
+            const email = document.getElementById('stEmail').value.trim();
+            const dept = document.getElementById('stDept').value.trim();
+
+            try {
+                const response = await fetch('/api/admin/interns/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ intern_id: sid, name, email, department: dept })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    notify('Registered Successfully', `${name} is registered as student ID ${sid}.`, 'success');
+                    document.getElementById('addStudentForm').reset();
+                    loadAllStudents();
+                } else {
+                    notify('Registration Failed', data.message, 'error');
+                }
+            } catch(e) {
+                console.error(e);
+                notify('Error', 'Server connection error.', 'error');
+            }
+        }
+
+        async function deleteStudent(sid) {
+            if (!confirm(`Are you sure you want to remove student ID ${sid}? All associated attendance logs and leave records will be permanently deleted.`)) return;
+
+            try {
+                const response = await fetch(`/api/admin/interns/${sid}`, { method: 'DELETE' });
+                const data = await response.json();
+
+                if (data.success) {
+                    notify('Record Removed', 'Student record was deleted.', 'success');
+                    loadAllStudents();
+                } else {
+                    notify('Deletion Failed', data.message, 'error');
+                }
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        // EXPORTS
+        function exportExcel() {
+            const query = getFilterQuery();
+            window.location.href = `/api/admin/download_excel${query}`;
+        }
+
+        function exportPowerBI() {
+            const query = getFilterQuery();
+            window.location.href = `/api/admin/export_powerbi${query}`;
+        }
+
+        async function logout() {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+                window.location.href = '/login';
+            } catch(e) {}
+        }
+    </script>
+</body>
+</html>

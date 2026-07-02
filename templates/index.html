@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ session.csrf_token }}">
+<script>
+    (function() {
+        const originalFetch = window.fetch;
+        window.fetch = async function(url, options = {}) {
+            if (options.method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(options.method.toUpperCase())) {
+                options.headers = options.headers || {};
+                const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                if (token) {
+                    options.headers['X-CSRFToken'] = token;
+                }
+            }
+            return originalFetch(url, options);
+        };
+    })();
+</script>
+<title>Intern Attendance Management System</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ── DESIGN TOKENS ─────────────────────────────────────────── */
+:root {
+  --bg:          #F0F2F6;
+  --sidebar-bg:  #0D1B2A;
+  --sidebar-w:   252px;
+  --card:        #FFFFFF;
+  --card-alt:    #F7F9FC;
+  --border:      #DDE3ED;
+  --border-soft: #EEF1F7;
+
+  --blue-900:    #0A1F35;
+  --blue-800:    #132E4A;
+  --blue-700:    #1A4070;
+  --blue-600:    #1D6FA6;
+  --blue-500:    #2182C0;
+  --blue-400:    #4BA3D8;
+  --blue-100:    #DBEAFE;
+  --blue-50:     #EFF6FF;
+
+  --grey-900:    #111827;
+  --grey-700:    #374151;
+  --grey-500:    #6B7280;
+  --grey-400:    #9CA3AF;
+  --grey-200:    #E5E7EB;
+  --grey-100:    #F3F4F6;
+
+  --green:       #059669;
+  --green-bg:    #ECFDF5;
+  --amber:       #B45309;
+  --amber-bg:    #FFFBEB;
+  --red:         #DC2626;
+  --red-bg:      #FEF2F2;
+  --indigo:      #4338CA;
+  --indigo-bg:   #EEF2FF;
+
+  --text:        #111827;
+  --text-muted:  #6B7280;
+  --text-light:  #9CA3AF;
+
+  --shadow-sm:   0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:   0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg:   0 10px 30px rgba(0,0,0,0.10), 0 4px 8px rgba(0,0,0,0.05);
+
+  --radius:      8px;
+  --radius-lg:   12px;
+  --font:        'IBM Plex Sans', sans-serif;
+  --mono:        'IBM Plex Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+html, body { height:100%; }
+body { font-family:var(--font); background:var(--bg); color:var(--text); font-size:14px; line-height:1.5; display:flex; }
+
+/* ── SIDEBAR ────────────────────────────────────────────────── */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  position: fixed;
+  top:0; left:0; bottom:0;
+  z-index: 100;
+}
+.sidebar-brand {
+  padding: 22px 18px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.brand-mark { display:flex; align-items:center; gap:10px; margin-bottom:3px; }
+.brand-icon {
+  width:32px; height:32px;
+  background: linear-gradient(135deg, #1D6FA6, #132E4A);
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius:6px; display:grid; place-items:center; flex-shrink:0;
+}
+.brand-icon svg { width:16px; height:16px; }
+.brand-name { font-size:0.88rem; font-weight:700; color:#FFF; letter-spacing:-0.2px; }
+.brand-sub  { font-size:0.67rem; color:rgba(255,255,255,0.3); padding-left:42px; letter-spacing:0.3px; text-transform:uppercase; }
+
+.sidebar-nav { padding:12px 10px; flex:1; overflow-y:auto; }
+.nav-section {
+  font-size:0.6rem; font-weight:600; color:rgba(255,255,255,0.25);
+  text-transform:uppercase; letter-spacing:1.2px;
+  padding:0 8px; margin-bottom:4px; margin-top:16px;
+}
+.nav-section:first-child { margin-top:0; }
+
+.nav-item {
+  display:flex; align-items:center; gap:9px;
+  padding:7px 10px; border-radius:6px; cursor:pointer;
+  color:rgba(255,255,255,0.5); font-size:0.81rem; font-weight:500;
+  transition:all 0.15s; margin-bottom:1px;
+  border:none; background:transparent; width:100%; text-align:left;
+  position:relative;
+}
+.nav-item:hover { background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.8); }
+.nav-item.active { background:rgba(29,111,166,0.2); color:#fff; font-weight:600; border-left:2px solid #2182C0; }
+.nav-icon { width:16px; height:16px; flex-shrink:0; opacity:0.7; }
+.nav-item.active .nav-icon { opacity:1; }
+.nav-badge {
+  margin-left:auto; background:#EF4444; color:#fff;
+  font-size:0.63rem; font-weight:700; padding:1px 6px;
+  border-radius:10px; min-width:18px; text-align:center;
+}
+
+/* Admin-only nav items */
+.nav-item.admin-only { display:none; }
+
+.sidebar-footer {
+  padding:14px 16px;
+  border-top:1px solid rgba(255,255,255,0.06);
+}
+.live-badge {
+  display:flex; align-items:center; gap:8px;
+  padding:7px 11px; background:rgba(255,255,255,0.04);
+  border-radius:6px; border:1px solid rgba(255,255,255,0.06);
+}
+.live-dot {
+  width:6px; height:6px; border-radius:50%; background:#34D399;
+  box-shadow:0 0 0 2px rgba(52,211,153,0.2);
+  animation:pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 2px rgba(52,211,153,0.2)} 50%{box-shadow:0 0 0 5px rgba(52,211,153,0.08)} }
+.live-time { font-family:var(--mono); font-size:0.76rem; color:rgba(255,255,255,0.65); }
+
+/* ── MAIN ───────────────────────────────────────────────────── */
+.main { margin-left:var(--sidebar-w); flex:1; min-height:100vh; display:flex; flex-direction:column; }
+
+.topbar {
+  background:var(--card); border-bottom:1px solid var(--border);
+  padding:0 24px; height:56px; display:flex; align-items:center;
+  justify-content:space-between; position:sticky; top:0; z-index:90;
+  box-shadow:var(--shadow-sm);
+}
+.page-title    { font-size:0.93rem; font-weight:700; color:var(--grey-900); letter-spacing:-0.2px; }
+.page-subtitle { font-size:0.72rem; color:var(--text-muted); font-weight:400; }
+.topbar-right  { display:flex; align-items:center; gap:8px; }
+
+.btn-sm {
+  padding:6px 12px; border-radius:5px; font-size:0.74rem; font-weight:600;
+  font-family:var(--font); cursor:pointer; border:none;
+  display:inline-flex; align-items:center; gap:5px; transition:all 0.15s;
+}
+.btn-sm:active { transform:scale(0.97); }
+.btn-ghost { background:transparent; color:var(--text-muted); border:1px solid var(--border); }
+.btn-ghost:hover { background:var(--grey-100); color:var(--text); }
+
+/* ── ADMIN PILL ─────────────────────────────────────────────── */
+.admin-pill {
+  display:none; align-items:center; gap:6px;
+  padding:4px 10px; background:var(--indigo-bg);
+  border:1px solid #C7D2FE; border-radius:20px;
+  font-size:0.7rem; font-weight:600; color:var(--indigo);
+}
+.admin-pill.visible { display:flex; }
+
+/* ── ADMIN LOGIN MODAL ──────────────────────────────────────── */
+.admin-login-bar {
+  background:var(--card); border-bottom:1px solid var(--border);
+  padding:10px 24px; display:flex; align-items:center; gap:10px;
+  font-size:0.8rem; color:var(--text-muted);
+}
+.admin-login-bar input {
+  padding:5px 10px; border:1.5px solid var(--border);
+  border-radius:5px; font-family:var(--font); font-size:0.8rem;
+  outline:none; background:var(--card-alt);
+}
+.admin-login-bar input:focus { border-color:var(--blue-500); }
+
+.content { padding:20px 24px; flex:1; }
+.panel { display:none; animation:fadeIn 0.18s ease; }
+.panel.active { display:block; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── STAT CARDS ─────────────────────────────────────────────── */
+.stats-row { display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:18px; }
+@media(max-width:1100px){ .stats-row{grid-template-columns:repeat(3,1fr);} }
+@media(max-width:700px){  .stats-row{grid-template-columns:repeat(2,1fr);} }
+
+.stat-card {
+  background:var(--card); border:1px solid var(--border);
+  border-radius:var(--radius); padding:16px;
+  box-shadow:var(--shadow-sm); display:flex; align-items:flex-start;
+  gap:12px; transition:box-shadow 0.2s, transform 0.2s;
+}
+.stat-card:hover { box-shadow:var(--shadow-md); transform:translateY(-1px); }
+.stat-icon-box {
+  width:38px; height:38px; border-radius:7px;
+  display:grid; place-items:center; flex-shrink:0;
+}
+.stat-icon-box svg { width:18px; height:18px; }
+.icon-blue   { background:var(--blue-50);   color:var(--blue-600); }
+.icon-green  { background:var(--green-bg);  color:var(--green);    }
+.icon-amber  { background:var(--amber-bg);  color:var(--amber);    }
+.icon-red    { background:var(--red-bg);    color:var(--red);      }
+.icon-indigo { background:var(--indigo-bg); color:var(--indigo);   }
+
+.stat-val { font-size:1.5rem; font-weight:700; font-family:var(--mono); color:var(--grey-900); line-height:1.1; }
+.stat-lbl { font-size:0.68rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-top:2px; }
+
+/* ── CARDS ──────────────────────────────────────────────────── */
+.card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); overflow:hidden; margin-bottom:16px; }
+.card-head { padding:13px 18px; border-bottom:1px solid var(--border-soft); display:flex; align-items:center; justify-content:space-between; }
+.card-title { font-size:0.83rem; font-weight:700; color:var(--grey-900); display:flex; align-items:center; gap:7px; }
+.card-title svg { width:14px; height:14px; color:var(--text-muted); }
+.chip { font-size:0.65rem; font-weight:600; padding:2px 8px; border-radius:20px; background:var(--blue-50); color:var(--blue-600); font-family:var(--mono); }
+.card-body { padding:16px 18px; }
+
+.two-col { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+@media(max-width:700px){ .two-col{grid-template-columns:1fr;} }
+
+/* ── FORMS ──────────────────────────────────────────────────── */
+.form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
+@media(max-width:600px){ .form-grid{grid-template-columns:1fr;} }
+.form-group { display:flex; flex-direction:column; gap:4px; }
+.form-label { font-size:0.68rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; }
+.form-input, .form-select, .form-textarea {
+  background:var(--card-alt); border:1.5px solid var(--border);
+  color:var(--text); padding:8px 11px; border-radius:6px;
+  font-family:var(--font); font-size:0.85rem; outline:none;
+  transition:border-color 0.15s, box-shadow 0.15s;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  border-color:var(--blue-500);
+  box-shadow:0 0 0 3px rgba(33,130,192,0.1); background:#fff;
+}
+.form-input::placeholder { color:var(--text-light); }
+.form-textarea { resize:vertical; min-height:80px; }
+
+/* ── BUTTONS ────────────────────────────────────────────────── */
+.btn { padding:8px 16px; border-radius:6px; font-family:var(--font); font-size:0.82rem; font-weight:600; cursor:pointer; border:none; display:inline-flex; align-items:center; gap:6px; transition:all 0.15s; }
+.btn:active { transform:scale(0.97); }
+.btn svg { width:14px; height:14px; }
+.btn-block  { width:100%; justify-content:center; padding:9px; }
+.btn-primary { background:var(--blue-700); color:#fff; box-shadow:0 2px 8px rgba(26,64,112,0.2); }
+.btn-primary:hover { background:var(--blue-800); }
+.btn-green  { background:#059669; color:#fff; }
+.btn-green:hover { background:#047857; }
+.btn-amber  { background:var(--amber); color:#fff; }
+.btn-amber:hover { background:#92400E; }
+.btn-red    { background:var(--red); color:#fff; }
+.btn-red:hover { background:#B91C1C; }
+.btn-outline { background:transparent; border:1.5px solid var(--border); color:var(--text-muted); }
+.btn-outline:hover { border-color:var(--blue-500); color:var(--blue-600); background:var(--blue-50); }
+.btn-indigo { background:var(--indigo); color:#fff; }
+.btn-indigo:hover { background:#3730A3; }
+
+/* ── INFO STRIP ─────────────────────────────────────────────── */
+.info-strip { padding:8px 12px; border-radius:6px; font-size:0.76rem; font-weight:500; display:flex; align-items:center; gap:6px; margin-top:11px; line-height:1.5; }
+.strip-blue   { background:var(--blue-50);   color:var(--blue-700);  border:1px solid var(--blue-100); }
+.strip-amber  { background:var(--amber-bg);  color:var(--amber);     border:1px solid #FDE68A; }
+.strip-indigo { background:var(--indigo-bg); color:var(--indigo);    border:1px solid #C7D2FE; }
+.strip-red    { background:var(--red-bg);    color:var(--red);       border:1px solid #FECACA; }
+
+/* ── TABLE ──────────────────────────────────────────────────── */
+.table-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; }
+thead th { background:var(--card-alt); padding:8px 13px; text-align:left; font-size:0.67rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; border-bottom:1.5px solid var(--border); white-space:nowrap; }
+tbody td { padding:9px 13px; font-size:0.81rem; border-bottom:1px solid var(--border-soft); color:var(--grey-700); }
+tbody tr:last-child td { border-bottom:none; }
+tbody tr:hover td { background:var(--card-alt); }
+
+/* ── STATUS CHIPS ───────────────────────────────────────────── */
+.status { display:inline-block; padding:2px 9px; border-radius:20px; font-size:0.68rem; font-weight:600; letter-spacing:0.2px; }
+.s-present  { background:var(--green-bg);  color:var(--green);  }
+.s-late     { background:var(--amber-bg);  color:var(--amber);  }
+.s-absent   { background:var(--red-bg);    color:var(--red);    }
+.s-loggedin { background:var(--blue-50);   color:var(--blue-600); }
+.s-onleave  { background:var(--indigo-bg); color:var(--indigo); }
+.s-pending  { background:var(--amber-bg);  color:var(--amber);  }
+.s-approved { background:var(--green-bg);  color:var(--green);  }
+.s-rejected { background:var(--red-bg);    color:var(--red);    }
+
+/* ── CHART ──────────────────────────────────────────────────── */
+.chart-area { display:flex; align-items:flex-end; gap:5px; height:90px; padding-bottom:2px; }
+.chart-col  { display:flex; flex-direction:column; align-items:center; flex:1; gap:2px; }
+.bars       { display:flex; gap:2px; align-items:flex-end; height:78px; }
+.bar { width:7px; border-radius:3px 3px 0 0; min-height:3px; transition:height 0.45s cubic-bezier(.34,1.2,.64,1); }
+.bar-p { background:var(--blue-600); }
+.bar-l { background:#D97706; }
+.bar-a { background:#D1D5DB; }
+.bar-v { background:var(--indigo); }
+.chart-lbl { font-size:0.58rem; color:var(--text-light); font-family:var(--mono); white-space:nowrap; }
+.chart-legend { display:flex; gap:12px; margin-top:8px; flex-wrap:wrap; }
+.legend-item { display:flex; align-items:center; gap:4px; font-size:0.68rem; color:var(--text-muted); }
+.legend-dot { width:8px; height:8px; border-radius:2px; }
+
+/* ── EMPTY STATE ────────────────────────────────────────────── */
+.empty-state { text-align:center; padding:36px 20px; color:var(--text-muted); }
+.empty-icon  { width:32px; height:32px; margin:0 auto 10px; opacity:0.25; }
+
+/* ── NOTIFICATION ───────────────────────────────────────────── */
+#notif {
+  position:fixed; bottom:24px; right:24px; z-index:9999;
+  background:var(--grey-900); color:#fff; border-radius:8px;
+  padding:11px 15px; display:flex; align-items:flex-start; gap:10px;
+  box-shadow:var(--shadow-lg); max-width:300px;
+  transform:translateY(100px); opacity:0; transition:all 0.28s cubic-bezier(.34,1.2,.64,1);
+  pointer-events:none;
+}
+#notif.show { transform:translateY(0); opacity:1; pointer-events:auto; }
+#notif.success { background:#064E3B; border-left:3px solid #34D399; }
+#notif.error   { background:#7F1D1D; border-left:3px solid #F87171; }
+#notif.warning { background:#78350F; border-left:3px solid #FCD34D; }
+.notif-title { font-size:0.8rem; font-weight:700; margin-bottom:2px; }
+.notif-msg   { font-size:0.74rem; opacity:0.8; line-height:1.4; }
+
+/* ── CODE BLOCK ─────────────────────────────────────────────── */
+.code-block { background:#0F172A; border-radius:7px; padding:13px; font-family:var(--mono); font-size:0.74rem; line-height:1.8; color:#E2E8F0; overflow-x:auto; }
+.steps-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+@media(max-width:700px){ .steps-grid{grid-template-columns:1fr;} }
+.step-box { background:var(--card-alt); border:1px solid var(--border); border-radius:var(--radius); padding:15px; }
+.step-num { width:24px; height:24px; border-radius:5px; background:var(--blue-700); color:#fff; font-size:0.75rem; font-weight:700; display:grid; place-items:center; margin-bottom:9px; }
+.step-title { font-size:0.8rem; font-weight:700; margin-bottom:5px; color:var(--grey-900); }
+.step-desc  { font-size:0.75rem; color:var(--text-muted); line-height:1.6; }
+
+/* ── MODAL ──────────────────────────────────────────────────── */
+.modal-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,0.45);
+  z-index:999; display:none; align-items:center; justify-content:center;
+  backdrop-filter:blur(2px);
+}
+.modal-overlay.open { display:flex; }
+.modal-box {
+  background:var(--card); border-radius:12px; width:500px; max-width:95vw;
+  max-height:90vh; overflow-y:auto; box-shadow:var(--shadow-lg);
+  animation:fadeIn 0.18s ease;
+}
+.modal-head {
+  padding:16px 20px; border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between;
+}
+.modal-head h3 { font-size:0.9rem; font-weight:700; color:var(--grey-900); }
+.modal-close { background:none; border:none; cursor:pointer; color:var(--text-muted); padding:3px 6px; border-radius:4px; font-size:1.1rem; line-height:1; }
+.modal-close:hover { background:var(--grey-100); }
+.modal-body { padding:20px; }
+.modal-footer { padding:13px 20px; border-top:1px solid var(--border); display:flex; gap:9px; justify-content:flex-end; }
+
+.detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
+.detail-item label { font-size:0.66rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:3px; }
+.detail-item span  { font-size:0.86rem; color:var(--grey-900); font-weight:500; }
+.reason-box { background:var(--card-alt); border:1px solid var(--border); border-radius:6px; padding:10px 13px; font-size:0.84rem; color:var(--grey-700); line-height:1.5; margin-bottom:14px; }
+
+/* ── ACCESS DENIED ──────────────────────────────────────────── */
+.access-denied {
+  text-align:center; padding:60px 24px;
+}
+.access-denied svg { width:48px; height:48px; color:var(--grey-400); margin-bottom:14px; }
+.access-denied h3 { font-size:1rem; font-weight:700; color:var(--grey-700); margin-bottom:6px; }
+.access-denied p { font-size:0.83rem; color:var(--text-muted); margin-bottom:20px; max-width:320px; margin-left:auto; margin-right:auto; }
+
+/* Inline ID ref style */
+.id-ref { font-family:var(--mono); font-size:0.78rem; color:var(--blue-700); background:var(--blue-50); padding:1px 6px; border-radius:4px; }
+</style>
+</head>
+<body>
+
+<!-- ─── SIDEBAR ─────────────────────────────────────────────── -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-mark">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      </div>
+      <span class="brand-name">AttendanceMS</span>
+    </div>
+    <div class="brand-sub">Intern Management</div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section">Overview</div>
+    <button class="nav-item active" onclick="switchTab('dashboard',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Dashboard
+    </button>
+
+    <div class="nav-section">Attendance</div>
+    <button class="nav-item" onclick="switchTab('attendance',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      Mark Attendance
+    </button>
+    <button class="nav-item" onclick="switchTab('records',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      All Records
+    </button>
+
+    <div class="nav-section">Leave</div>
+    <button class="nav-item" id="nav-apply-leave" onclick="switchTab('apply-leave',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+      Apply for Leave
+    </button>
+    <button class="nav-item admin-only" id="nav-leave-admin" onclick="switchTab('leave-admin',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      Leave Requests
+      <span class="nav-badge" id="leave-badge" style="display:none">0</span>
+    </button>
+
+    <div class="nav-section">Management</div>
+    <button class="nav-item" onclick="switchTab('interns',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Interns
+    </button>
+    <button class="nav-item" onclick="switchTab('powerbi',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Power BI Export
+    </button>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      <span class="live-time" id="clock">--:--:--</span>
+    </div>
+  </div>
+</aside>
+
+<!-- ─── MAIN ─────────────────────────────────────────────────── -->
+<div class="main">
+  <!-- Top bar -->
+  <div class="topbar">
+    <div>
+      <div class="page-title" id="page-title">Dashboard</div>
+      <div class="page-subtitle" id="page-subtitle">Today's attendance overview</div>
+    </div>
+    <div class="topbar-right">
+      <span style="font-size:0.73rem;color:var(--text-muted)" id="today-date"></span>
+      <div class="admin-pill" id="admin-pill">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        Admin
+      </div>
+      <button class="btn-sm btn-ghost" onclick="dlExcel()">Export Excel</button>
+      <button class="btn-sm btn-ghost" id="admin-btn" onclick="showAdminLogin()">Admin Login</button>
+    </div>
+  </div>
+
+  <!-- Admin login bar (hidden by default) -->
+  <div class="admin-login-bar" id="admin-login-bar" style="display:none">
+    <span style="font-weight:600;color:var(--grey-700);font-size:0.8rem">Admin Login</span>
+    <input type="text"     id="al-user" placeholder="Username" style="width:130px">
+    <input type="password" id="al-pass" placeholder="Password" style="width:130px">
+    <button class="btn-sm btn-ghost" style="background:var(--blue-700);color:#fff;border:none" onclick="doAdminLogin()">Sign In</button>
+    <button class="btn-sm btn-ghost" onclick="hideAdminLogin()">Cancel</button>
+  </div>
+
+  <div class="content">
+
+    <!-- ═══════════════════════ DASHBOARD ═══════════════════════ -->
+    <div class="panel active" id="panel-dashboard">
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-icon-box icon-blue">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </div>
+          <div><div class="stat-val" id="s-total">0</div><div class="stat-lbl">Logged Today</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon-box icon-green">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div><div class="stat-val" id="s-present">0</div><div class="stat-lbl">Present</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon-box icon-amber">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div><div class="stat-val" id="s-late">0</div><div class="stat-lbl">Late</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon-box icon-red">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+          </div>
+          <div><div class="stat-val" id="s-absent">0</div><div class="stat-lbl">Absent</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon-box icon-indigo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          </div>
+          <div><div class="stat-val" id="s-onleave">0</div><div class="stat-lbl">On Leave</div></div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              Weekly Overview
+            </div>
+            <div class="chart-legend">
+              <div class="legend-item"><div class="legend-dot" style="background:var(--blue-600)"></div>Present</div>
+              <div class="legend-item"><div class="legend-dot" style="background:#D97706"></div>Late</div>
+              <div class="legend-item"><div class="legend-dot" style="background:#D1D5DB"></div>Absent</div>
+              <div class="legend-item"><div class="legend-dot" style="background:var(--indigo)"></div>Leave</div>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="chart-area" id="weekly-chart">
+              <div class="empty-state" style="width:100%"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><p>No data yet</p></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Quick Actions
+            </div>
+          </div>
+          <div class="card-body" style="display:flex;flex-direction:column;gap:9px">
+            <button class="btn btn-primary btn-block" onclick="switchTab('attendance',document.querySelector('[onclick*=attendance]'))">Mark Attendance</button>
+            <button class="btn btn-amber btn-block" id="qa-absent-btn" onclick="markAbsent()">Auto-Mark Absent</button>
+            <button class="btn btn-outline btn-block" onclick="switchTab('apply-leave',document.getElementById('nav-apply-leave'))">Apply for Leave</button>
+            <button class="btn btn-indigo btn-block admin-only" onclick="switchTab('leave-admin',document.getElementById('nav-leave-admin'))">Review Leave Requests</button>
+            <div class="info-strip strip-amber" style="margin-top:4px">Auto-Mark Absent marks all interns with no login record as Absent. Interns on approved leave are automatically marked On Leave instead.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Today's Attendance
+          </div>
+          <span class="chip" id="today-count">0 entries</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Intern ID</th><th>Name</th><th>Login</th>
+              <th>Logout</th><th>Hours</th><th>Status</th>
+            </tr></thead>
+            <tbody id="today-tbody">
+              <tr><td colspan="6"><div class="empty-state"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><p>No records yet today</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════ MARK ATTENDANCE ═══════════════════════ -->
+    <div class="panel" id="panel-attendance">
+      <div class="two-col">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Record Login
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="form-group" style="margin-bottom:12px">
+              <label class="form-label">Intern ID</label>
+              <input class="form-input" id="in-sid" placeholder="e.g. INT001" autocomplete="off">
+            </div>
+            <button class="btn btn-primary btn-block" onclick="doLogin()">Record Login</button>
+            <div class="info-strip strip-blue">Login after 7:30 AM is marked as <strong>Late</strong></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              Record Logout
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="form-group" style="margin-bottom:12px">
+              <label class="form-label">Intern ID</label>
+              <input class="form-input" id="out-sid" placeholder="e.g. INT001" autocomplete="off">
+            </div>
+            <button class="btn btn-green btn-block" onclick="doLogout()">Record Logout</button>
+            <div class="info-strip strip-blue">Working hours are calculated automatically on logout</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════ ALL RECORDS ═══════════════════════ -->
+    <div class="panel" id="panel-records">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            Complete Attendance History
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Date</th><th>Intern ID</th><th>Name</th>
+              <th>Login</th><th>Logout</th><th>Hours</th><th>Status</th>
+            </tr></thead>
+            <tbody id="all-tbody">
+              <tr><td colspan="7"><div class="empty-state"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg><p>No records yet</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════ APPLY FOR LEAVE ═══════════════════════ -->
+    <div class="panel" id="panel-apply-leave">
+      <div style="max-width:680px">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+              Submit Leave Application
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="info-strip strip-indigo" style="margin-top:0;margin-bottom:14px">
+              Leave applications must be approved by an administrator. Approved leaves will not be counted as absent.
+            </div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">Intern ID *</label>
+                <input class="form-input" id="lv-sid" placeholder="e.g. INT001" onblur="loadMyLeavesByField()">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Leave Type *</label>
+                <select class="form-input form-select" id="lv-type">
+                  <option value="">Select type</option>
+                  <option>Medical Leave</option>
+                  <option>Personal Leave</option>
+                  <option>Family Emergency</option>
+                  <option>Academic Leave</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">From Date *</label>
+                <input class="form-input" id="lv-from" type="date">
+              </div>
+              <div class="form-group">
+                <label class="form-label">To Date *</label>
+                <input class="form-input" id="lv-to" type="date">
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom:14px">
+              <label class="form-label">Reason *</label>
+              <textarea class="form-input form-textarea" id="lv-reason" placeholder="Provide a brief reason for the leave request"></textarea>
+            </div>
+            <div id="lv-days-display" style="display:none" class="info-strip strip-blue"></div>
+            <button class="btn btn-primary btn-block" style="margin-top:12px" onclick="submitLeave()">Submit Leave Application</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg>
+              My Leave Applications
+            </div>
+            <button class="btn-sm btn-ghost" onclick="loadMyLeavesByField()">Refresh</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Leave ID</th><th>Type</th><th>From</th><th>To</th>
+                <th>Days</th><th>Status</th><th>Remarks</th>
+              </tr></thead>
+              <tbody id="my-leaves-tbody">
+                <tr><td colspan="7"><div class="empty-state"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg><p>Enter your Intern ID above to view your applications</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════ LEAVE ADMIN ═══════════════════════ -->
+    <div class="panel" id="panel-leave-admin">
+      <!-- Access denied state (shown when not admin) -->
+      <div id="leave-admin-denied" style="display:none">
+        <div class="access-denied">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <h3>Administrator Access Required</h3>
+          <p>Leave Requests management is restricted to administrators. Please sign in using your admin credentials.</p>
+          <button class="btn btn-primary" onclick="showAdminLogin()">Sign In as Admin</button>
+        </div>
+      </div>
+
+      <!-- Admin content (shown when admin) -->
+      <div id="leave-admin-content" style="display:none">
+        <div class="stats-row" style="grid-template-columns:repeat(4,1fr)">
+          <div class="stat-card">
+            <div class="stat-icon-box icon-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+            <div><div class="stat-val" id="lv-total">0</div><div class="stat-lbl">Total</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon-box icon-amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+            <div><div class="stat-val" id="lv-pending">0</div><div class="stat-lbl">Pending</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon-box icon-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div><div class="stat-val" id="lv-approved">0</div><div class="stat-lbl">Approved</div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon-box icon-red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>
+            <div><div class="stat-val" id="lv-rejected">0</div><div class="stat-lbl">Rejected</div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Pending Leave Requests
+            </div>
+            <button class="btn-sm btn-ghost" onclick="loadAllLeaves()">Refresh</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Leave ID</th><th>Intern</th><th>Department</th><th>Type</th>
+                <th>From</th><th>To</th><th>Days</th><th>Action</th>
+              </tr></thead>
+              <tbody id="pending-tbody">
+                <tr><td colspan="8"><div class="empty-state"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="20 6 9 17 4 12"/></svg><p>No pending requests</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg>
+              All Leave Applications
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input class="form-input" style="width:150px;padding:5px 9px;font-size:0.77rem" id="lv-search" placeholder="Search name or ID" oninput="filterAllLeaves()">
+              <select class="form-input form-select" style="width:120px;padding:5px 9px;font-size:0.77rem" id="lv-filter" onchange="filterAllLeaves()">
+                <option value="">All Status</option>
+                <option>Pending</option>
+                <option>Approved</option>
+                <option>Rejected</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Leave ID</th><th>Intern</th><th>Department</th><th>Type</th>
+                <th>From</th><th>To</th><th>Days</th><th>Status</th><th>Action</th>
+              </tr></thead>
+              <tbody id="all-leaves-tbody">
+                <tr><td colspan="9"><div class="empty-state"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg><p>No applications</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════ INTERNS ═══════════════════════ -->
+    <div class="panel" id="panel-interns">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Register New Intern
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label">Intern ID *</label>
+              <input class="form-input" id="st-id" placeholder="e.g. INT001">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Full Name *</label>
+              <input class="form-input" id="st-name" placeholder="Full name">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Department</label>
+              <input class="form-input" id="st-class" placeholder="e.g. Engineering">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input class="form-input" id="st-email" placeholder="email@company.com">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="addIntern()">Register Intern</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Registered Interns
+          </div>
+          <button class="btn-sm btn-ghost" onclick="loadInterns()">Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Intern ID</th><th>Name</th><th>Department</th><th>Email</th><th>Action</th></tr></thead>
+            <tbody id="interns-tbody">
+              <tr><td colspan="5"><div class="empty-state"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><p>No interns registered yet</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════ POWER BI ═══════════════════════ -->
+    <div class="panel" id="panel-powerbi">
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-head">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export Data
+          </div>
+        </div>
+        <div class="card-body" style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="dlExcel()">Download Excel (.xlsx)</button>
+          <button class="btn btn-outline" onclick="dlCSV()">Download CSV for Power BI</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Power BI Integration Guide
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="steps-grid">
+            <div class="step-box">
+              <div class="step-num">1</div>
+              <div class="step-title">Export CSV</div>
+              <div class="step-desc">Click "Download CSV for Power BI" above. Open Power BI Desktop — Get Data — Text/CSV — select the exported file.</div>
+            </div>
+            <div class="step-box">
+              <div class="step-num">2</div>
+              <div class="step-title">Build Visuals</div>
+              <div class="step-desc">Use Card visuals for KPIs, Bar chart for weekly data, Donut for Present vs Absent vs On Leave breakdown.</div>
+            </div>
+            <div class="step-box">
+              <div class="step-num">3</div>
+              <div class="step-title">DAX Measures</div>
+              <div class="step-desc">Apply calculated measures for Attendance %, Late %, On Leave %, and Average Working Hours per intern.</div>
+            </div>
+          </div>
+          <div class="code-block" style="margin-top:14px">
+            <span style="color:#93C5FD">Attendance %</span> = <span style="color:#FCA5A5">DIVIDE</span>(<span style="color:#86EFAC">COUNTROWS</span>(<span style="color:#FCD34D">FILTER</span>(Attendance, Attendance[Status] = <span style="color:#6EE7B7">"Present"</span>)), <span style="color:#86EFAC">COUNTROWS</span>(Attendance)) * 100<br>
+            <span style="color:#93C5FD">On Leave %</span> &nbsp;= <span style="color:#FCA5A5">DIVIDE</span>(<span style="color:#86EFAC">COUNTROWS</span>(<span style="color:#FCD34D">FILTER</span>(Attendance, Attendance[Status] = <span style="color:#6EE7B7">"On Leave"</span>)), <span style="color:#86EFAC">COUNTROWS</span>(Attendance)) * 100
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- ═══════════════════════ REVIEW MODAL ═══════════════════════ -->
+<div class="modal-overlay" id="review-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>Review Leave Application</h3>
+      <button class="modal-close" onclick="closeModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-grid">
+        <div class="detail-item"><label>Leave ID</label><span id="m-lid"></span></div>
+        <div class="detail-item"><label>Status</label><span id="m-status"></span></div>
+        <div class="detail-item"><label>Intern</label><span id="m-sname"></span></div>
+        <div class="detail-item"><label>Department</label><span id="m-class"></span></div>
+        <div class="detail-item"><label>Leave Type</label><span id="m-type"></span></div>
+        <div class="detail-item"><label>Duration</label><span id="m-days"></span></div>
+        <div class="detail-item"><label>From</label><span id="m-from"></span></div>
+        <div class="detail-item"><label>To</label><span id="m-to"></span></div>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Reason</label>
+        <div class="reason-box" id="m-reason"></div>
+      </div>
+      <div id="review-fields">
+        <div class="form-group">
+          <label class="form-label">Admin Remarks (optional)</label>
+          <textarea class="form-input form-textarea" id="admin-remarks" placeholder="Add any remarks" style="min-height:60px"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" id="review-btns">
+      <button class="btn btn-red" onclick="submitReview('Rejected')">Reject</button>
+      <button class="btn btn-green" onclick="submitReview('Approved')">Approve</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ NOTIFICATION ═══════════════════════ -->
+<div id="notif">
+  <div class="notif-text">
+    <div class="notif-title" id="notif-title">Success</div>
+    <div class="notif-msg"   id="notif-msg">Message</div>
+  </div>
+</div>
+
+<script>
+// ── STATE ────────────────────────────────────────────────────
+const pageMeta = {
+  dashboard:    {title:'Dashboard',              sub:"Today's attendance overview"},
+  attendance:   {title:'Mark Attendance',        sub:'Record intern login and logout'},
+  interns:      {title:'Interns',                sub:'Register and manage interns'},
+  records:      {title:'All Records',            sub:'Complete attendance history'},
+  'apply-leave':{title:'Apply for Leave',        sub:'Submit a leave application'},
+  'leave-admin':{title:'Leave Requests',         sub:'Review and approve leave applications (Admin)'},
+  powerbi:      {title:'Power BI Export',        sub:'Export data for Power BI integration'},
+};
+let allLeavesData  = [];
+let currentLeaveId = null;
+let adminLoggedIn  = false;
+
+// ── ADMIN AUTH ───────────────────────────────────────────────
+function showAdminLogin() {
+  document.getElementById('admin-login-bar').style.display = 'flex';
+  document.getElementById('al-user').focus();
+}
+function hideAdminLogin() {
+  document.getElementById('admin-login-bar').style.display = 'none';
+}
+
+async function doAdminLogin() {
+  const user = document.getElementById('al-user').value.trim();
+  const pass = document.getElementById('al-pass').value.trim();
+  const res  = await post('/api/admin/login', {username:user, password:pass});
+  if (res.success) {
+    adminLoggedIn = true;
+    hideAdminLogin();
+    document.getElementById('al-user').value = '';
+    document.getElementById('al-pass').value = '';
+    setAdminUI(true);
+    notify('Admin Access Granted', 'You are now signed in as Administrator.', 'success');
+    refreshDash();
+  } else {
+    notify('Login Failed', res.message || 'Invalid credentials.', 'error');
+  }
+}
+
+async function doAdminLogout() {
+  await post('/api/admin/logout', {});
+  adminLoggedIn = false;
+  setAdminUI(false);
+  // If on admin panel, redirect to dashboard
+  const active = document.querySelector('.panel.active');
+  if (active && active.id === 'panel-leave-admin') {
+    switchTab('dashboard', document.querySelector('.nav-item'));
+  }
+  notify('Signed Out', 'Admin session ended.', 'warning');
+}
+
+function setAdminUI(isAdmin) {
+  // Show/hide admin nav items
+  document.querySelectorAll('.admin-only').forEach(el => {
+    el.style.display = isAdmin ? 'flex' : 'none';
+  });
+  // Admin pill in topbar
+  const pill = document.getElementById('admin-pill');
+  pill.classList.toggle('visible', isAdmin);
+  // Admin button
+  const btn = document.getElementById('admin-btn');
+  btn.textContent = isAdmin ? 'Sign Out' : 'Admin Login';
+  btn.onclick     = isAdmin ? doAdminLogout : showAdminLogin;
+  // Leave admin panel
+  document.getElementById('leave-admin-denied').style.display  = isAdmin ? 'none' : '';
+  document.getElementById('leave-admin-content').style.display = isAdmin ? '' : 'none';
+}
+
+// Check existing session on load
+(async function checkSession() {
+  try {
+    const res = await fetch('/api/admin/me').then(r=>r.json());
+    if (res.is_admin) {
+      adminLoggedIn = true;
+      setAdminUI(true);
+    } else {
+      setAdminUI(false);
+    }
+  } catch(e) { setAdminUI(false); }
+})();
+
+// ── TAB ──────────────────────────────────────────────────────
+function switchTab(name, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  if (btn) btn.classList.add('active');
+  const m = pageMeta[name] || {};
+  document.getElementById('page-title').textContent    = m.title || name;
+  document.getElementById('page-subtitle').textContent = m.sub   || '';
+  if (name === 'dashboard' || name === 'records') refreshDash();
+  if (name === 'interns')      loadInterns();
+  if (name === 'leave-admin')  { if(adminLoggedIn) loadAllLeaves(); }
+  if (name === 'apply-leave')  loadMyLeavesByField();
+}
+
+// ── CLOCK ────────────────────────────────────────────────────
+function tick() {
+  const n = new Date();
+  document.getElementById('clock').textContent =
+    n.toLocaleTimeString('en-IN', {hour12:false});
+  document.getElementById('today-date').textContent =
+    n.toLocaleDateString('en-GB', {weekday:'short', day:'2-digit', month:'short', year:'numeric'});
+}
+setInterval(tick, 1000); tick();
+
+// ── NOTIFICATION ─────────────────────────────────────────────
+function notify(title, msg, type='success') {
+  const el = document.getElementById('notif');
+  document.getElementById('notif-title').textContent = title;
+  document.getElementById('notif-msg').textContent   = msg;
+  el.className = 'show ' + type;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.className = '', 4500);
+}
+
+// ── API ──────────────────────────────────────────────────────
+async function post(url, body) {
+  const r = await fetch(url, {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)});
+  return r.json();
+}
+
+// ── LOGIN ────────────────────────────────────────────────────
+async function doLogin() {
+  const sid = document.getElementById('in-sid').value.trim();
+  if (!sid) { notify('Validation', 'Intern ID is required.', 'warning'); return; }
+  const res = await post('/api/login', {intern_id:sid});
+  notify(res.success ? 'Login Recorded' : 'Login Failed', res.message, res.success?'success':'error');
+  if (res.success) { document.getElementById('in-sid').value=''; refreshDash(); }
+}
+
+// ── LOGOUT ───────────────────────────────────────────────────
+async function doLogout() {
+  const sid = document.getElementById('out-sid').value.trim();
+  if (!sid) { notify('Validation', 'Intern ID is required.', 'warning'); return; }
+  const res = await post('/api/logout', {intern_id:sid});
+  notify(res.success ? 'Logout Recorded' : 'Logout Failed',
+    res.success ? res.message + ' — ' + res.working_hours : res.message,
+    res.success ? 'success' : 'error');
+  if (res.success) { document.getElementById('out-sid').value=''; refreshDash(); }
+}
+
+// ── ADD INTERN ───────────────────────────────────────────────
+async function addIntern() {
+  const sid   = document.getElementById('st-id').value.trim();
+  const name  = document.getElementById('st-name').value.trim();
+  const dept  = document.getElementById('st-class').value.trim();
+  const email = document.getElementById('st-email').value.trim();
+  if (!sid||!name) { notify('Validation','ID and Name are required.','warning'); return; }
+  const res = await post('/api/add_intern', {intern_id:sid, intern_name:name, department:dept, email:email});
+  notify(res.success?'Intern Registered':'Registration Failed', res.message, res.success?'success':'error');
+  if (res.success) {
+    ['st-id','st-name','st-class','st-email'].forEach(i=>document.getElementById(i).value='');
+    loadInterns();
+  }
+}
+
+async function loadInterns() {
+  const r = await fetch('/api/interns');
+  const d = await r.json();
+  const tb = document.getElementById('interns-tbody');
+  if (!d.interns||!d.interns.length) {
+    tb.innerHTML='<tr><td colspan="5"><div class="empty-state"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><p>No interns registered yet</p></div></td></tr>';
+    return;
+  }
+  tb.innerHTML = d.interns.map(s=>`
+    <tr>
+      <td><span class="id-ref">${s.intern_id}</span></td>
+      <td style="font-weight:600">${s.intern_name}</td>
+      <td>${s.department||'—'}</td>
+      <td style="font-size:.79rem;color:var(--text-muted)">${s.email||'—'}</td>
+      <td><button class="btn-sm" style="background:var(--red-bg);color:var(--red);border:none;font-size:.73rem" onclick="deleteIntern('${s.intern_id}')">Remove</button></td>
+    </tr>`).join('');
+}
+
+async function deleteIntern(sid) {
+  if (!confirm(`Remove intern ${sid} from the system?`)) return;
+  const res = await post('/api/delete_intern', {intern_id:sid});
+  notify(res.success?'Removed':'Error', res.message, res.success?'success':'error');
+  if (res.success) loadInterns();
+}
+
+// ── MARK ABSENT ──────────────────────────────────────────────
+async function markAbsent() {
+  if (!confirm('Mark all interns with no login today as Absent? Interns on approved leave will be marked On Leave instead.')) return;
+  const res = await post('/api/mark_absent', {});
+  let msg = `${res.absent_count} marked Absent`;
+  if (res.leave_count) msg += `, ${res.leave_count} marked On Leave`;
+  notify('Auto-Mark Complete', msg, 'success');
+  refreshDash();
+}
+
+// ── STATUS CHIP ──────────────────────────────────────────────
+function statusChip(s) {
+  const map = {
+    'Present':   's-present',
+    'Late':      's-late',
+    'Absent':    's-absent',
+    'Logged In': 's-loggedin',
+    'On Leave':  's-onleave',
+  };
+  return `<span class="status ${map[s]||'s-loggedin'}">${s}</span>`;
+}
+
+function leaveStatusChip(s) {
+  const map = {'Pending':'s-pending','Approved':'s-approved','Rejected':'s-rejected'};
+  return `<span class="status ${map[s]||'s-pending'}">${s}</span>`;
+}
+
+// ── DASHBOARD ────────────────────────────────────────────────
+async function refreshDash() {
+  try {
+    const d = await fetch('/api/dashboard').then(r=>r.json());
+    const t = d.today || {};
+
+    document.getElementById('s-total').textContent   = t.total    ?? '0';
+    document.getElementById('s-present').textContent = t.present  ?? '0';
+    document.getElementById('s-late').textContent    = t.late     ?? '0';
+    document.getElementById('s-absent').textContent  = t.absent   ?? '0';
+    document.getElementById('s-onleave').textContent = t.on_leave ?? '0';
+
+    // Leave badge (only meaningful for admins)
+    const badge   = document.getElementById('leave-badge');
+    const pending = d.pending_leaves || 0;
+    badge.textContent = pending;
+    badge.style.display = (pending > 0 && adminLoggedIn) ? '' : 'none';
+
+    // Today table
+    const tb = document.getElementById('today-tbody');
+    document.getElementById('today-count').textContent = (t.total||0) + ' entries';
+    if (t.records && t.records.length) {
+      tb.innerHTML = t.records.map(r=>`
+        <tr>
+          <td><span class="id-ref">${r.intern_id||'—'}</span></td>
+          <td style="font-weight:600">${r.name||'—'}</td>
+          <td style="font-family:var(--mono);font-size:.79rem">${r.login||'—'}</td>
+          <td style="font-family:var(--mono);font-size:.79rem">${r.logout||'—'}</td>
+          <td style="font-family:var(--mono);font-size:.79rem;color:var(--blue-600)">${r.hours||'—'}</td>
+          <td>${statusChip(r.status)}</td>
+        </tr>`).join('');
+    } else {
+      tb.innerHTML = '<tr><td colspan="6"><div class="empty-state"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/></svg><p>No records yet today</p></div></td></tr>';
+    }
+
+    // All records
+    const ab = document.getElementById('all-tbody');
+    if (d.all_records && d.all_records.length) {
+      ab.innerHTML = [...d.all_records].reverse().map(r=>`
+        <tr>
+          <td style="font-family:var(--mono);font-size:.75rem;color:var(--text-muted)">${r.date}</td>
+          <td><span class="id-ref">${r.intern_id||'—'}</span></td>
+          <td style="font-weight:600">${r.name||'—'}</td>
+          <td style="font-family:var(--mono);font-size:.79rem">${r.login||'—'}</td>
+          <td style="font-family:var(--mono);font-size:.79rem">${r.logout||'—'}</td>
+          <td style="font-family:var(--mono);font-size:.79rem;color:var(--blue-600)">${r.hours||'—'}</td>
+          <td>${statusChip(r.status)}</td>
+        </tr>`).join('');
+    }
+
+    buildChart(d.weekly || []);
+  } catch(e) { console.warn('Dashboard error', e); }
+}
+
+function buildChart(weekly) {
+  const el = document.getElementById('weekly-chart');
+  if (!weekly.length) {
+    el.innerHTML = '<div class="empty-state" style="width:100%"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><p>No data yet</p></div>';
+    return;
+  }
+  const sorted = [...weekly].sort((a,b)=>a.date.localeCompare(b.date)).slice(-7);
+  const maxV   = Math.max(...sorted.flatMap(d=>[d.present,d.late,d.absent,(d.on_leave||0)]),1);
+  el.innerHTML = sorted.map(d => {
+    const ph = Math.max(Math.round((d.present/maxV)*75),4);
+    const lh = Math.max(Math.round((d.late/maxV)*75),3);
+    const ah = Math.max(Math.round((d.absent/maxV)*75),3);
+    const vh = Math.max(Math.round(((d.on_leave||0)/maxV)*75),3);
+    const lbl = d.date.slice(5);
+    return `<div class="chart-col">
+      <div class="bars">
+        <div class="bar bar-p" style="height:${ph}px" title="Present: ${d.present}"></div>
+        <div class="bar bar-l" style="height:${lh}px" title="Late: ${d.late}"></div>
+        <div class="bar bar-a" style="height:${ah}px" title="Absent: ${d.absent}"></div>
+        <div class="bar bar-v" style="height:${vh}px" title="On Leave: ${d.on_leave||0}"></div>
+      </div>
+      <div class="chart-lbl">${lbl}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── LEAVE APPLY ──────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const fromEl = document.getElementById('lv-from');
+  const toEl   = document.getElementById('lv-to');
+  const daysEl = document.getElementById('lv-days-display');
+  function updateDays() {
+    if (fromEl.value && toEl.value) {
+      const f = new Date(fromEl.value), t = new Date(toEl.value);
+      const days = Math.max(1, Math.round((t-f)/(1000*60*60*24))+1);
+      daysEl.textContent = `Duration: ${days} day(s)`;
+      daysEl.style.display = '';
+    }
+  }
+  fromEl.addEventListener('change', updateDays);
+  toEl.addEventListener('change',   updateDays);
+});
+
+async function submitLeave() {
+  const sid  = document.getElementById('lv-sid').value.trim();
+  const type = document.getElementById('lv-type').value.trim();
+  const from = document.getElementById('lv-from').value.trim();
+  const to   = document.getElementById('lv-to').value.trim();
+  const rsn  = document.getElementById('lv-reason').value.trim();
+  if (!sid||!type||!from||!to||!rsn) {
+    notify('Validation','All fields are required.','warning'); return;
+  }
+  if (new Date(from) > new Date(to)) {
+    notify('Validation','From date cannot be after To date.','warning'); return;
+  }
+  const res = await post('/api/leave/apply',
+    {intern_id:sid, leave_type:type, from_date:from, to_date:to, reason:rsn});
+  notify(res.success?'Application Submitted':'Error', res.message, res.success?'success':'error');
+  if (res.success) {
+    ['lv-type','lv-from','lv-to','lv-reason'].forEach(i=>document.getElementById(i).value='');
+    document.getElementById('lv-days-display').style.display='none';
+    loadMyLeavesBySid(sid);
+    refreshDash();
+  }
+}
+
+async function loadMyLeavesByField() {
+  const sid = document.getElementById('lv-sid').value.trim();
+  if (sid) loadMyLeavesBySid(sid);
+}
+
+async function loadMyLeavesBySid(sid) {
+  if (!sid) return;
+  const r = await fetch(`/api/leave/my_leaves?intern_id=${encodeURIComponent(sid)}`);
+  const d = await r.json();
+  const tb = document.getElementById('my-leaves-tbody');
+  if (!d.success || !d.leaves.length) {
+    tb.innerHTML='<tr><td colspan="7"><div class="empty-state"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg><p>No leave applications for this intern.</p></div></td></tr>';
+    return;
+  }
+  tb.innerHTML = d.leaves.map(l=>`
+    <tr>
+      <td><span class="id-ref">${l.leave_id}</span></td>
+      <td>${l.leave_type}</td>
+      <td>${l.from_date}</td>
+      <td>${l.to_date}</td>
+      <td style="font-weight:600">${l.days}</td>
+      <td>${leaveStatusChip(l.status)}</td>
+      <td style="font-size:.77rem;color:var(--text-muted);max-width:180px">${l.remarks||'—'}</td>
+    </tr>`).join('');
+}
+
+// ── LEAVE ADMIN ──────────────────────────────────────────────
+async function loadAllLeaves() {
+  if (!adminLoggedIn) return;
+  const r = await fetch('/api/leave/all_leaves');
+  const d = await r.json();
+  if (!d.success) return;
+  allLeavesData = d.leaves;
+  const s = d.stats;
+  document.getElementById('lv-total').textContent    = s.total;
+  document.getElementById('lv-pending').textContent  = s.pending;
+  document.getElementById('lv-approved').textContent = s.approved;
+  document.getElementById('lv-rejected').textContent = s.rejected;
+
+  const pending = d.leaves.filter(l=>l.status==='Pending');
+  const ptb = document.getElementById('pending-tbody');
+  if (!pending.length) {
+    ptb.innerHTML='<tr><td colspan="8"><div class="empty-state"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="20 6 9 17 4 12"/></svg><p>No pending requests. All caught up.</p></div></td></tr>';
+  } else {
+    ptb.innerHTML = pending.map(l=>`
+      <tr>
+        <td><span class="id-ref">${l.leave_id}</span></td>
+        <td><strong>${l.intern_name}</strong><br><span style="font-size:.74rem;color:var(--text-muted)">${l.intern_id}</span></td>
+        <td>${l.department||'—'}</td>
+        <td>${l.leave_type}</td>
+        <td>${l.from_date}</td>
+        <td>${l.to_date}</td>
+        <td style="font-weight:600">${l.days}</td>
+        <td><button class="btn-sm" style="background:var(--blue-50);color:var(--blue-700);border:none;font-size:.73rem" onclick="openReview('${l.leave_id}')">Review</button></td>
+      </tr>`).join('');
+  }
+  renderAllLeaves();
+}
+
+function filterAllLeaves() { renderAllLeaves(); }
+
+function renderAllLeaves() {
+  const search = (document.getElementById('lv-search').value||'').toLowerCase();
+  const filter = document.getElementById('lv-filter').value;
+  const data   = allLeavesData.filter(l => {
+    const ms = !search || l.intern_name.toLowerCase().includes(search) || l.intern_id.toLowerCase().includes(search);
+    const mf = !filter || l.status === filter;
+    return ms && mf;
+  });
+  const tb = document.getElementById('all-leaves-tbody');
+  if (!data.length) {
+    tb.innerHTML='<tr><td colspan="9"><div class="empty-state"><svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg><p>No applications found.</p></div></td></tr>';
+    return;
+  }
+  tb.innerHTML = data.map(l=>`
+    <tr>
+      <td><span class="id-ref">${l.leave_id}</span></td>
+      <td><strong>${l.intern_name}</strong><br><span style="font-size:.74rem;color:var(--text-muted)">${l.intern_id}</span></td>
+      <td>${l.department||'—'}</td>
+      <td>${l.leave_type}</td>
+      <td>${l.from_date}</td>
+      <td>${l.to_date}</td>
+      <td style="font-weight:600">${l.days}</td>
+      <td>${leaveStatusChip(l.status)}</td>
+      <td>
+        ${l.status==='Pending'
+          ? `<button class="btn-sm" style="background:var(--blue-50);color:var(--blue-700);border:none;font-size:.73rem" onclick="openReview('${l.leave_id}')">Review</button>`
+          : `<button class="btn-sm" style="background:var(--grey-100);color:var(--text-muted);border:none;font-size:.73rem" onclick="openReview('${l.leave_id}')">View</button>`}
+      </td>
+    </tr>`).join('');
+}
+
+// ── REVIEW MODAL ─────────────────────────────────────────────
+function openReview(lid) {
+  const r = allLeavesData.find(x=>x.leave_id===lid);
+  if (!r) return;
+  currentLeaveId = lid;
+  document.getElementById('m-lid').textContent   = r.leave_id;
+  document.getElementById('m-sname').textContent = `${r.intern_name} (${r.intern_id})`;
+  document.getElementById('m-class').textContent = r.department||'—';
+  document.getElementById('m-type').textContent  = r.leave_type;
+  document.getElementById('m-from').textContent  = r.from_date;
+  document.getElementById('m-to').textContent    = r.to_date;
+  document.getElementById('m-days').textContent  = r.days + ' day(s)';
+  document.getElementById('m-status').innerHTML  = leaveStatusChip(r.status);
+  document.getElementById('m-reason').textContent= r.reason;
+  document.getElementById('admin-remarks').value = '';
+  const isPending = r.status === 'Pending';
+  document.getElementById('review-fields').style.display = isPending ? '' : 'none';
+  document.getElementById('review-btns').style.display   = isPending ? '' : 'none';
+  document.getElementById('review-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('review-modal').classList.remove('open');
+}
+
+async function submitReview(action) {
+  const remarks = document.getElementById('admin-remarks').value.trim();
+  const res = await post('/api/leave/review', {leave_id:currentLeaveId, action, remarks});
+  if (res.success) {
+    notify(action==='Approved'?'Leave Approved':'Leave Rejected', res.message,
+      action==='Approved'?'success':'warning');
+    closeModal();
+    loadAllLeaves();
+    refreshDash();
+  } else {
+    notify('Error', res.message, 'error');
+  }
+}
+
+// ── DOWNLOADS ────────────────────────────────────────────────
+function dlExcel() { window.location.href='/api/download_excel'; }
+function dlCSV()   { window.location.href='/api/export_powerbi'; }
+
+// ── KEYBOARD ─────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const id = document.activeElement?.id;
+  if (id === 'in-sid')   doLogin();
+  if (id === 'out-sid')  doLogout();
+  if (['st-id','st-name','st-class','st-email'].includes(id)) addIntern();
+  if (id === 'al-pass')  doAdminLogin();
+  if (id === 'lv-sid')   loadMyLeavesByField();
+});
+
+// ── MODAL CLOSE ON BACKDROP ───────────────────────────────────
+document.getElementById('review-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+// ── INIT ─────────────────────────────────────────────────────
+refreshDash();
+</script>
+</body>
+</html>

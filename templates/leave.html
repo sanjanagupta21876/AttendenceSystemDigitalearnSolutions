@@ -1,0 +1,1578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="csrf-token" content="{{ session.csrf_token }}">
+<script>
+    (function() {
+        const originalFetch = window.fetch;
+        window.fetch = async function(url, options = {}) {
+            if (options.method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(options.method.toUpperCase())) {
+                options.headers = options.headers || {};
+                const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                if (token) {
+                    options.headers['X-CSRFToken'] = token;
+                }
+            }
+            return originalFetch(url, options);
+        };
+    })();
+</script>
+<title>Leave Management — AttendanceMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+/* ══════════════════════════════════════
+   TOKENS & RESET
+══════════════════════════════════════ */
+:root {
+  --ink:       #0d1b2a;
+  --ink2:      #1b3050;
+  --ink3:      #2d4a6e;
+  --sea:       #1a6b8a;
+  --sea2:      #0e8a9e;
+  --sea3:      #12b5cc;
+  --foam:      #e8f7fa;
+  --foam2:     #c8eef5;
+  --sand:      #f5f0e8;
+  --gold:      #c9913d;
+  --gold2:     #f5c56a;
+  --sage:      #2d8a5e;
+  --sage-bg:   #e8f7f0;
+  --rose:      #b83b3b;
+  --rose-bg:   #fdf0f0;
+  --amber:     #c47a1e;
+  --amber-bg:  #fef7e8;
+  --white:     #ffffff;
+  --off:       #f7f9fc;
+  --border:    #dde4ee;
+  --muted:     #6b7fa3;
+  --radius:    14px;
+  --radius-sm: 8px;
+  --shadow:    0 4px 32px rgba(13,27,42,.10);
+  --shadow-lg: 0 16px 64px rgba(13,27,42,.16);
+  --transition: .22s cubic-bezier(.4,0,.2,1);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Outfit', sans-serif;
+  background: var(--off);
+  color: var(--ink);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ══════════════════════════════════════
+   LOGIN
+══════════════════════════════════════ */
+#loginScreen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(26,107,138,.35) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 80% at 80% 90%, rgba(18,181,204,.18) 0%, transparent 55%),
+    linear-gradient(160deg, var(--ink) 0%, var(--ink2) 50%, #183548 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+#loginScreen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 60px, rgba(255,255,255,.015) 60px, rgba(255,255,255,.015) 61px),
+    repeating-linear-gradient(90deg, transparent, transparent 60px, rgba(255,255,255,.015) 60px, rgba(255,255,255,.015) 61px);
+  pointer-events: none;
+}
+
+.login-card {
+  background: var(--white);
+  border-radius: 22px;
+  width: 440px;
+  max-width: 95vw;
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255,255,255,.08);
+  overflow: hidden;
+  animation: cardIn .5s cubic-bezier(.22,1,.36,1);
+}
+
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(24px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.login-header {
+  background: linear-gradient(135deg, var(--ink2), var(--ink3));
+  padding: 36px 36px 28px;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-header::after {
+  content: '≋';
+  position: absolute;
+  right: -10px; top: -20px;
+  font-size: 160px;
+  color: rgba(255,255,255,.04);
+  line-height: 1;
+  pointer-events: none;
+}
+
+.login-header .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 40px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--foam2);
+  letter-spacing: .5px;
+  margin-bottom: 16px;
+}
+
+.login-header h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: 28px;
+  color: var(--white);
+  line-height: 1.2;
+}
+
+.login-header p {
+  font-size: 13px;
+  color: rgba(255,255,255,.5);
+  margin-top: 6px;
+}
+
+.login-body { padding: 28px 36px 36px; }
+
+.role-switch {
+  display: flex;
+  background: var(--off);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 24px;
+  gap: 4px;
+}
+
+.role-btn {
+  flex: 1;
+  padding: 9px 16px;
+  border: none;
+  background: none;
+  border-radius: 7px;
+  cursor: pointer;
+  font-family: 'Outfit', sans-serif;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--muted);
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.role-btn.active {
+  background: var(--white);
+  color: var(--ink2);
+  box-shadow: 0 2px 8px rgba(13,27,42,.1);
+}
+
+.fld { margin-bottom: 18px; }
+
+.fld label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  margin-bottom: 7px;
+}
+
+.fld input, .fld select, .fld textarea {
+  width: 100%;
+  padding: 13px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: 'Outfit', sans-serif;
+  font-size: 14.5px;
+  color: var(--ink);
+  background: var(--off);
+  outline: none;
+  transition: border var(--transition), box-shadow var(--transition), background var(--transition);
+}
+
+.fld input:focus, .fld select:focus, .fld textarea:focus {
+  border-color: var(--sea2);
+  background: var(--white);
+  box-shadow: 0 0 0 3.5px rgba(14,138,158,.12);
+}
+
+.fld textarea { resize: vertical; min-height: 88px; line-height: 1.5; }
+
+.fld select { cursor: pointer; }
+
+.btn-login {
+  width: 100%;
+  padding: 15px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--sea), var(--ink3));
+  color: var(--white);
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: .3px;
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-login:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(26,107,138,.45);
+}
+
+.btn-login:active { transform: translateY(0); }
+
+.login-hint {
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 16px;
+}
+
+.login-hint b { color: var(--sea); }
+
+/* ══════════════════════════════════════
+   APP SHELL
+══════════════════════════════════════ */
+#appShell { display: none; min-height: 100vh; }
+
+/* SIDEBAR */
+.sidebar {
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  width: 268px;
+  background: var(--ink);
+  display: flex;
+  flex-direction: column;
+  z-index: 200;
+  border-right: 1px solid rgba(255,255,255,.06);
+}
+
+.sb-brand {
+  padding: 28px 24px 22px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+
+.sb-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.sb-logo-icon {
+  width: 42px; height: 42px;
+  background: linear-gradient(135deg, var(--sea), var(--sea2));
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  box-shadow: 0 4px 14px rgba(14,138,158,.4);
+}
+
+.sb-logo h2 {
+  font-family: 'Playfair Display', serif;
+  font-size: 19px;
+  color: var(--white);
+  line-height: 1.1;
+}
+
+.sb-logo small {
+  display: block;
+  font-size: 11px;
+  color: rgba(255,255,255,.35);
+  font-weight: 400;
+  margin-top: 1px;
+}
+
+.sb-user {
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.sb-user .role-tag {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 30px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+  margin-bottom: 7px;
+}
+
+.tag-admin   { background: var(--gold2); color: #5c3a00; }
+.tag-student { background: var(--sea3);  color: #003d4a; }
+
+.sb-user .sb-name { font-size: 14px; font-weight: 600; color: var(--white); }
+.sb-user .sb-id   { font-size: 11.5px; color: rgba(255,255,255,.38); margin-top: 2px; }
+
+/* NAV */
+nav { padding: 14px 12px; flex: 1; }
+
+nav a {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 14px;
+  border-radius: 9px;
+  text-decoration: none;
+  color: rgba(255,255,255,.55);
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: var(--transition);
+  margin-bottom: 3px;
+  position: relative;
+}
+
+nav a .ni { font-size: 16px; width: 20px; text-align: center; }
+
+nav a:hover {
+  color: var(--white);
+  background: rgba(255,255,255,.07);
+}
+
+nav a.active {
+  color: var(--white);
+  background: rgba(26,107,138,.35);
+  font-weight: 600;
+}
+
+nav a.active::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 20%; bottom: 20%;
+  width: 3px;
+  background: var(--sea3);
+  border-radius: 0 3px 3px 0;
+}
+
+.sb-footer {
+  padding: 18px 20px;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+
+.btn-signout {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid rgba(185,59,59,.3);
+  background: rgba(185,59,59,.1);
+  border-radius: 8px;
+  color: #fca5a5;
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+}
+
+.btn-signout:hover { background: rgba(185,59,59,.25); }
+
+/* MAIN */
+.main-area {
+  margin-left: 268px;
+  padding: 36px 40px;
+  min-height: 100vh;
+}
+
+/* ══════════════════════════════════════
+   PAGES
+══════════════════════════════════════ */
+.page { display: none; animation: fadeUp .3s ease; }
+.page.active { display: block; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Page header */
+.pg-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 30px;
+}
+
+.pg-head h2 {
+  font-family: 'Playfair Display', serif;
+  font-size: 30px;
+  color: var(--ink);
+  line-height: 1.1;
+}
+
+.pg-head p {
+  font-size: 13.5px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+
+/* ══ STAT CARDS ══ */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  margin-bottom: 28px;
+}
+
+.stat {
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  box-shadow: var(--shadow);
+  border-top: 4px solid var(--border);
+  transition: transform var(--transition), box-shadow var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat::after {
+  content: '';
+  position: absolute;
+  right: -20px; bottom: -20px;
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  opacity: .06;
+}
+
+.stat:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+.stat.c-total   { border-color: var(--sea2); }
+.stat.c-pending { border-color: var(--amber); }
+.stat.c-approved{ border-color: var(--sage); }
+.stat.c-rejected{ border-color: var(--rose); }
+.stat.c-total::after   { background: var(--sea2); }
+.stat.c-pending::after { background: var(--amber); }
+.stat.c-approved::after{ background: var(--sage); }
+.stat.c-rejected::after{ background: var(--rose); }
+
+.stat-icon {
+  font-size: 22px;
+  margin-bottom: 10px;
+  display: block;
+}
+
+.stat-num {
+  font-family: 'Playfair Display', serif;
+  font-size: 40px;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-top: 6px;
+}
+
+/* ══ CARD ══ */
+.card {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.card-hd {
+  padding: 18px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+
+.card-hd h3 {
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--ink2);
+}
+
+.filters {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.filters input, .filters select {
+  padding: 8px 13px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--off);
+  outline: none;
+  transition: border var(--transition);
+}
+
+.filters input:focus, .filters select:focus { border-color: var(--sea2); }
+
+/* ══ TABLE ══ */
+.tbl-scroll { overflow-x: auto; }
+
+table { width: 100%; border-collapse: collapse; }
+
+thead th {
+  padding: 11px 18px;
+  background: #f3f6fb;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+tbody td {
+  padding: 14px 18px;
+  font-size: 13.5px;
+  color: var(--ink);
+  border-bottom: 1px solid #f0f4f8;
+  vertical-align: middle;
+}
+
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: #f8fbff; }
+
+.lid-tag {
+  display: inline-block;
+  background: #eef2f8;
+  color: var(--ink3);
+  border-radius: 5px;
+  padding: 3px 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  letter-spacing: .3px;
+}
+
+.student-cell .sname { font-weight: 600; }
+.student-cell .sid   { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+
+/* ══ STATUS PILLS ══ */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 12px;
+  border-radius: 30px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; }
+
+.pill-pending  { background: var(--amber-bg); color: var(--amber); }
+.pill-pending::before { background: var(--amber); }
+.pill-approved { background: var(--sage-bg);  color: var(--sage); }
+.pill-approved::before { background: var(--sage); }
+.pill-rejected { background: var(--rose-bg);  color: var(--rose); }
+.pill-rejected::before { background: var(--rose); }
+
+/* ══ ACTION BUTTONS ══ */
+.btn-sm {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+
+.btn-review  { background: var(--foam2); color: var(--sea); }
+.btn-review:hover  { background: var(--sea); color: var(--white); }
+.btn-details { background: #eef2f8; color: var(--ink3); }
+.btn-details:hover { background: var(--ink3); color: var(--white); }
+
+/* EMPTY */
+.empty {
+  text-align: center;
+  padding: 56px 24px;
+  color: var(--muted);
+}
+
+.empty .emo { font-size: 44px; display: block; margin-bottom: 12px; opacity: .5; }
+.empty p    { font-size: 14px; }
+
+/* ══════════════════════════════════════
+   APPLY FORM (Student)
+══════════════════════════════════════ */
+.apply-wrap { max-width: 700px; }
+
+.apply-card {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.apply-card-head {
+  padding: 28px 32px 22px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.apply-card-head .head-icon {
+  width: 50px; height: 50px;
+  background: var(--foam);
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.apply-card-head h3 {
+  font-family: 'Playfair Display', serif;
+  font-size: 21px;
+  color: var(--ink);
+}
+
+.apply-card-head p {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.apply-form { padding: 28px 32px 32px; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+.days-banner {
+  background: linear-gradient(135deg, var(--foam), var(--foam2));
+  border: 1.5px solid var(--sea3);
+  border-radius: var(--radius-sm);
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity .3s, transform .3s;
+}
+
+.days-banner.show { opacity: 1; transform: translateY(0); }
+
+.days-banner .days-num {
+  font-family: 'Playfair Display', serif;
+  font-size: 32px;
+  color: var(--sea);
+  line-height: 1;
+}
+
+.days-banner .days-label { font-size: 13px; color: var(--ink3); }
+.days-banner .days-label b { display: block; font-size: 11px; color: var(--muted); font-weight: 500; }
+
+.btn-primary {
+  padding: 14px 36px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--sea), var(--ink3));
+  color: var(--white);
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: .3px;
+  transition: var(--transition);
+  margin-top: 10px;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(26,107,138,.4);
+}
+
+/* ══════════════════════════════════════
+   MODAL
+══════════════════════════════════════ */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(13,27,42,.65);
+  backdrop-filter: blur(4px);
+  z-index: 900;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.overlay.open { display: flex; }
+
+.modal {
+  background: var(--white);
+  border-radius: 20px;
+  width: 560px;
+  max-width: 96vw;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: modalIn .3s cubic-bezier(.22,1,.36,1);
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(.94) translateY(16px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-hd {
+  background: linear-gradient(135deg, var(--ink2), var(--ink3));
+  padding: 24px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-hd h4 {
+  font-family: 'Playfair Display', serif;
+  font-size: 19px;
+  color: var(--white);
+}
+
+.modal-hd .sub { font-size: 12px; color: rgba(255,255,255,.45); margin-top: 2px; }
+
+.modal-close {
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.15);
+  color: rgba(255,255,255,.7);
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: var(--transition);
+}
+
+.modal-close:hover { background: rgba(255,255,255,.2); color: var(--white); }
+
+.modal-body { padding: 28px; }
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.detail-item label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+.detail-item p {
+  font-size: 14.5px;
+  color: var(--ink);
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+.detail-item.full { grid-column: 1 / -1; }
+.detail-item.full p {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink2);
+  background: var(--off);
+  border-radius: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+}
+
+.modal-divider { border: none; border-top: 1px solid var(--border); margin: 4px 0 20px; }
+
+.review-btns {
+  display: flex;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.btn-approve, .btn-reject {
+  flex: 1;
+  padding: 13px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: 'Outfit', sans-serif;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-approve { background: var(--sage-bg); color: var(--sage); }
+.btn-approve:hover { background: var(--sage); color: var(--white); transform: translateY(-1px); }
+.btn-reject  { background: var(--rose-bg); color: var(--rose); }
+.btn-reject:hover  { background: var(--rose); color: var(--white); transform: translateY(-1px); }
+
+/* ══════════════════════════════════════
+   TOAST
+══════════════════════════════════════ */
+#toastStack {
+  position: fixed;
+  top: 22px; right: 26px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--white);
+  border-radius: 10px;
+  padding: 14px 18px;
+  box-shadow: 0 8px 32px rgba(13,27,42,.18), 0 0 0 1px var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  font-weight: 500;
+  min-width: 270px;
+  max-width: 380px;
+  animation: toastIn .28s cubic-bezier(.22,1,.36,1);
+  border-left: 4px solid var(--sea2);
+  pointer-events: auto;
+}
+
+.toast.success { border-left-color: var(--sage); }
+.toast.error   { border-left-color: var(--rose); }
+.toast.warn    { border-left-color: var(--amber); }
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(30px) scale(.96); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+/* ══════════════════════════════════════
+   TOP-RIGHT ACTION BUTTON
+══════════════════════════════════════ */
+.pg-action {
+  padding: 11px 22px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--sea), var(--ink3));
+  color: var(--white);
+  font-family: 'Outfit', sans-serif;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+
+.pg-action:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(26,107,138,.4); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════
+  LOGIN
+═══════════════════════════════════════ -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-header">
+      <div class="badge">📋 Leave Management</div>
+      <h1>Welcome Back</h1>
+      <p>Sign in to manage your leave applications</p>
+    </div>
+    <div class="login-body">
+      <div class="role-switch">
+        <button class="role-btn active" id="tab-student" onclick="switchRole('student')">🎓 Student</button>
+        <button class="role-btn" id="tab-admin"   onclick="switchRole('admin')">🛡️ Admin</button>
+      </div>
+      <div class="fld">
+        <label id="lbl-user">Student ID</label>
+        <input type="text" id="inp-user" placeholder="Enter your Student ID" autocomplete="username"/>
+      </div>
+      <div class="fld">
+        <label>Password</label>
+        <input type="password" id="inp-pass" placeholder="••••••••" autocomplete="current-password"/>
+      </div>
+      <button class="btn-login" onclick="doLogin()">Sign In →</button>
+      <p class="login-hint" id="login-hint">
+        Default password is your <b>Student ID</b>
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+  APP SHELL
+═══════════════════════════════════════ -->
+<div id="appShell">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sb-brand">
+      <div class="sb-logo">
+        <div class="sb-logo-icon">📋</div>
+        <div>
+          <h2>LeaveMS</h2>
+          <small>Leave Management</small>
+        </div>
+      </div>
+      <div class="sb-user">
+        <div class="role-tag" id="sb-role-tag">—</div>
+        <div class="sb-name" id="sb-name">—</div>
+        <div class="sb-id"   id="sb-id"></div>
+      </div>
+    </div>
+
+    <!-- Student Nav -->
+    <nav id="nav-student" style="display:none">
+      <a href="#" class="active" data-page="pg-apply"    onclick="nav('pg-apply');return false"><span class="ni">✏️</span> Apply for Leave</a>
+      <a href="#"               data-page="pg-myleaves"  onclick="nav('pg-myleaves');return false"><span class="ni">📄</span> My Applications</a>
+    </nav>
+
+    <!-- Admin Nav -->
+    <nav id="nav-admin" style="display:none">
+      <a href="#" class="active" data-page="pg-dashboard" onclick="nav('pg-dashboard');return false"><span class="ni">📊</span> Dashboard</a>
+      <a href="#"                data-page="pg-all"        onclick="nav('pg-all');return false"><span class="ni">📋</span> All Applications</a>
+      <a href="#"                data-page="pg-summary"    onclick="nav('pg-summary');return false"><span class="ni">👥</span> Student Summary</a>
+    </nav>
+
+    <div class="sb-footer">
+      <button class="btn-signout" onclick="doLogout()">⬅ Sign Out</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main-area">
+
+    <!-- ── APPLY LEAVE ── -->
+    <div class="page" id="pg-apply">
+      <div class="pg-head">
+        <div>
+          <h2>Apply for Leave</h2>
+          <p>Submit a new leave request — your teacher will review it</p>
+        </div>
+      </div>
+      <div class="apply-wrap">
+        <div class="apply-card">
+          <div class="apply-card-head">
+            <div class="head-icon">🗓️</div>
+            <div>
+              <h3>Leave Application</h3>
+              <p>Fill in all details carefully. Submitted applications cannot be edited.</p>
+            </div>
+          </div>
+          <div class="apply-form">
+            <div class="fld">
+              <label>Leave Type</label>
+              <select id="f-type">
+                <option value="">Select a type…</option>
+                <option value="Medical Leave">🏥 Medical Leave</option>
+                <option value="Family Emergency">🏠 Family Emergency</option>
+                <option value="Personal Leave">🙋 Personal Leave</option>
+                <option value="Educational Event">🎓 Educational Event</option>
+                <option value="Bereavement">🕊️ Bereavement</option>
+                <option value="Other">📝 Other</option>
+              </select>
+            </div>
+            <div class="grid-2">
+              <div class="fld">
+                <label>From Date</label>
+                <input type="date" id="f-from" oninput="calcDays()"/>
+              </div>
+              <div class="fld">
+                <label>To Date</label>
+                <input type="date" id="f-to" oninput="calcDays()"/>
+              </div>
+            </div>
+            <div class="days-banner" id="days-banner">
+              <div class="days-num" id="days-num">0</div>
+              <div class="days-label">Day(s) of Leave<b>Total duration requested</b></div>
+            </div>
+            <div class="fld" style="margin-top:18px">
+              <label>Reason for Leave</label>
+              <textarea id="f-reason" placeholder="Briefly describe why you need this leave. Be specific so the admin can review effectively…"></textarea>
+            </div>
+            <button class="btn-primary" onclick="submitLeave()">Submit Application →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── MY APPLICATIONS (student) ── -->
+    <div class="page" id="pg-myleaves">
+      <div class="pg-head">
+        <div>
+          <h2>My Applications</h2>
+          <p>Track the status of your leave requests</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hd">
+          <h3>Application History</h3>
+          <div class="filters">
+            <select id="my-filter" onchange="renderMyLeaves()">
+              <option value="">All Status</option>
+              <option value="Pending">Pending</option>
+              <option value="Approved">Approved</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          </div>
+        </div>
+        <div class="tbl-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Leave ID</th>
+                <th>Type</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Days</th>
+                <th>Status</th>
+                <th>Admin Remarks</th>
+                <th>Applied On</th>
+              </tr>
+            </thead>
+            <tbody id="tb-mine"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── ADMIN DASHBOARD ── -->
+    <div class="page" id="pg-dashboard">
+      <div class="pg-head">
+        <div>
+          <h2>Dashboard</h2>
+          <p>Overview of all leave applications</p>
+        </div>
+        <button class="pg-action" onclick="nav('pg-all')">View All →</button>
+      </div>
+      <div class="stats-row">
+        <div class="stat c-total">
+          <span class="stat-icon">📋</span>
+          <div class="stat-num" id="s-total">0</div>
+          <div class="stat-label">Total Applications</div>
+        </div>
+        <div class="stat c-pending">
+          <span class="stat-icon">⏳</span>
+          <div class="stat-num" id="s-pending">0</div>
+          <div class="stat-label">Pending Review</div>
+        </div>
+        <div class="stat c-approved">
+          <span class="stat-icon">✅</span>
+          <div class="stat-num" id="s-approved">0</div>
+          <div class="stat-label">Approved</div>
+        </div>
+        <div class="stat c-rejected">
+          <span class="stat-icon">❌</span>
+          <div class="stat-num" id="s-rejected">0</div>
+          <div class="stat-label">Rejected</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hd">
+          <h3>⏳ Awaiting Review</h3>
+        </div>
+        <div class="tbl-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Leave ID</th>
+                <th>Student</th>
+                <th>Class</th>
+                <th>Type</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Days</th>
+                <th>Applied On</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="tb-pending"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── ALL APPLICATIONS (admin) ── -->
+    <div class="page" id="pg-all">
+      <div class="pg-head">
+        <div>
+          <h2>All Applications</h2>
+          <p>Full leave history — review and manage requests</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hd">
+          <h3>Applications</h3>
+          <div class="filters">
+            <input type="text" id="srch" placeholder="Search student name / ID…" oninput="renderAll()"/>
+            <select id="all-filter" onchange="renderAll()">
+              <option value="">All Status</option>
+              <option value="Pending">Pending</option>
+              <option value="Approved">Approved</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          </div>
+        </div>
+        <div class="tbl-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Leave ID</th>
+                <th>Student</th>
+                <th>Class</th>
+                <th>Type</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Days</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="tb-all"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── STUDENT SUMMARY (admin) ── -->
+    <div class="page" id="pg-summary">
+      <div class="pg-head">
+        <div>
+          <h2>Student Summary</h2>
+          <p>Aggregated leave statistics per student</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hd"><h3>Per-Student Overview</h3></div>
+        <div class="tbl-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Student ID</th>
+                <th>Name</th>
+                <th>Total</th>
+                <th>Pending</th>
+                <th>Approved</th>
+                <th>Rejected</th>
+                <th>Total Approved Days</th>
+              </tr>
+            </thead>
+            <tbody id="tb-summary"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════
+  REVIEW / VIEW MODAL
+═══════════════════════════════════════ -->
+<div class="overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-hd">
+      <div>
+        <h4>Leave Application</h4>
+        <div class="sub" id="m-lid-sub">—</div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-grid">
+        <div class="detail-item"><label>Student</label><p id="m-student">—</p></div>
+        <div class="detail-item"><label>Class</label><p id="m-class">—</p></div>
+        <div class="detail-item"><label>Leave Type</label><p id="m-type">—</p></div>
+        <div class="detail-item"><label>Status</label><p id="m-status">—</p></div>
+        <div class="detail-item"><label>From</label><p id="m-from">—</p></div>
+        <div class="detail-item"><label>To</label><p id="m-to">—</p></div>
+        <div class="detail-item"><label>Duration</label><p id="m-days">—</p></div>
+        <div class="detail-item"><label>Applied On</label><p id="m-applied">—</p></div>
+        <div class="detail-item full"><label>Reason</label><p id="m-reason">—</p></div>
+        <div class="detail-item full" id="m-remarks-wrap" style="display:none">
+          <label>Admin Remarks</label><p id="m-remarks-val">—</p>
+        </div>
+      </div>
+      <hr class="modal-divider" id="m-divider" style="display:none"/>
+      <div id="m-review-section" style="display:none">
+        <div class="fld">
+          <label>Remarks (optional)</label>
+          <textarea id="m-remarks" placeholder="Add a note for the student…" style="min-height:72px"></textarea>
+        </div>
+        <div class="review-btns">
+          <button class="btn-approve" onclick="review('Approved')">✓ Approve Leave</button>
+          <button class="btn-reject"  onclick="review('Rejected')">✗ Reject Leave</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST STACK -->
+<div id="toastStack"></div>
+
+<!-- ═══════════════════════════════════════
+  JAVASCRIPT
+═══════════════════════════════════════ -->
+<script>
+/* ─── STATE ─── */
+let role = null, myData = [], allData = [], activeLid = null;
+
+/* ─── LOGIN ─── */
+let loginRole = 'student';
+
+function switchRole(r) {
+  loginRole = r;
+  ['student','admin'].forEach(x => {
+    document.getElementById('tab-'+x).classList.toggle('active', x===r);
+  });
+  document.getElementById('lbl-user').textContent = r === 'admin' ? 'Username' : 'Student ID';
+  document.getElementById('inp-user').placeholder  = r === 'admin' ? 'admin' : 'Enter your Student ID';
+  document.getElementById('login-hint').innerHTML  = r === 'admin'
+    ? 'Contact your system administrator for credentials'
+    : 'Default password is your <b>Student ID</b>';
+}
+
+async function doLogin() {
+  const u = document.getElementById('inp-user').value.trim();
+  const p = document.getElementById('inp-pass').value.trim();
+  if (!u || !p) { toast('Please fill in all fields', 'error'); return; }
+
+  const res = await api('/leave/api/auth/login', { username: u, password: p });
+  if (res.success) {
+    bootApp(res);
+    toast('Welcome back, ' + res.name + '!', 'success');
+  } else {
+    toast(res.message || 'Invalid credentials.', 'error');
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('loginScreen').style.display !== 'none') doLogin();
+});
+
+async function doLogout() {
+  await fetch('/leave/api/auth/logout', { method: 'POST' });
+  role = null; myData = []; allData = [];
+  document.getElementById('appShell').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('inp-user').value = '';
+  document.getElementById('inp-pass').value = '';
+  toast('Signed out successfully.');
+}
+
+function bootApp(d) {
+  role = d.role;
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appShell').style.display = 'flex';
+
+  const rtag = document.getElementById('sb-role-tag');
+  rtag.textContent = d.role === 'admin' ? 'Administrator' : 'Student';
+  rtag.className   = 'role-tag ' + (d.role === 'admin' ? 'tag-admin' : 'tag-student');
+
+  document.getElementById('sb-name').textContent = d.name;
+  document.getElementById('sb-id').textContent   = d.role === 'student' ? 'ID: ' + d.student_id : '';
+
+  document.getElementById('nav-student').style.display = d.role === 'student' ? '' : 'none';
+  document.getElementById('nav-admin').style.display   = d.role === 'admin'   ? '' : 'none';
+
+  if (d.role === 'admin') { nav('pg-dashboard'); loadDashboard(); }
+  else                    { nav('pg-apply'); }
+}
+
+/* ─── NAVIGATION ─── */
+function nav(pageId) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(pageId).classList.add('active');
+
+  document.querySelectorAll('nav a').forEach(a => a.classList.toggle('active', a.dataset.page === pageId));
+
+  if (pageId === 'pg-myleaves')  loadMyLeaves();
+  if (pageId === 'pg-all')       loadAll();
+  if (pageId === 'pg-dashboard') loadDashboard();
+  if (pageId === 'pg-summary')   loadSummary();
+}
+
+/* ─── APPLY LEAVE ─── */
+function calcDays() {
+  const f = document.getElementById('f-from').value;
+  const t = document.getElementById('f-to').value;
+  const banner = document.getElementById('days-banner');
+  if (f && t) {
+    const d = Math.max(1, Math.round((new Date(t) - new Date(f)) / 86400000) + 1);
+    document.getElementById('days-num').textContent = d;
+    banner.classList.add('show');
+  } else {
+    banner.classList.remove('show');
+  }
+}
+
+async function submitLeave() {
+  const body = {
+    leave_type: document.getElementById('f-type').value,
+    from_date:  document.getElementById('f-from').value,
+    to_date:    document.getElementById('f-to').value,
+    reason:     document.getElementById('f-reason').value.trim()
+  };
+  if (!body.leave_type || !body.from_date || !body.to_date || !body.reason) {
+    toast('Please fill in all fields.', 'error'); return;
+  }
+  if (body.from_date > body.to_date) {
+    toast('"From" date cannot be after "To" date.', 'error'); return;
+  }
+  const r = await api('/leave/api/apply', body);
+  if (r.success) {
+    toast(r.message, 'success');
+    ['f-type','f-from','f-to','f-reason'].forEach(id => { document.getElementById(id).value = ''; });
+    document.getElementById('days-banner').classList.remove('show');
+  } else {
+    toast(r.message || 'Failed to submit.', 'error');
+  }
+}
+
+/* ─── MY LEAVES ─── */
+async function loadMyLeaves() {
+  const r = await fetch('/leave/api/my_leaves');
+  const d = await r.json();
+  if (d.success) myData = d.leaves;
+  renderMyLeaves();
+}
+
+function renderMyLeaves() {
+  const f = document.getElementById('my-filter').value;
+  const data = myData.filter(x => !f || x.status === f);
+  const tb = document.getElementById('tb-mine');
+  if (!data.length) { tb.innerHTML = emptyRow(8, 'No applications found.'); return; }
+  tb.innerHTML = data.map(r => `
+    <tr>
+      <td><span class="lid-tag">${r.leave_id}</span></td>
+      <td>${r.leave_type}</td>
+      <td>${r.from_date}</td>
+      <td>${r.to_date}</td>
+      <td><b>${r.days}</b></td>
+      <td>${pill(r.status)}</td>
+      <td style="max-width:200px;font-size:12.5px;color:var(--muted)">${r.remarks || '—'}</td>
+      <td style="font-size:12px;color:var(--muted)">${r.applied_on}</td>
+    </tr>`).join('');
+}
+
+/* ─── ADMIN DASHBOARD ─── */
+async function loadDashboard() {
+  const r = await fetch('/leave/api/all_leaves');
+  const d = await r.json();
+  if (!d.success) return;
+  allData = d.leaves;
+  const s = d.stats;
+  document.getElementById('s-total').textContent    = s.total;
+  document.getElementById('s-pending').textContent  = s.pending;
+  document.getElementById('s-approved').textContent = s.approved;
+  document.getElementById('s-rejected').textContent = s.rejected;
+
+  const pending = allData.filter(x => x.status === 'Pending');
+  const tb = document.getElementById('tb-pending');
+  if (!pending.length) { tb.innerHTML = emptyRow(9, '🎉 No pending applications!'); return; }
+  tb.innerHTML = pending.map(r => `
+    <tr>
+      <td><span class="lid-tag">${r.leave_id}</span></td>
+      <td class="student-cell">
+        <div class="sname">${r.student_name}</div>
+        <div class="sid">${r.student_id}</div>
+      </td>
+      <td>${r.class || '—'}</td>
+      <td>${r.leave_type}</td>
+      <td>${r.from_date}</td>
+      <td>${r.to_date}</td>
+      <td><b>${r.days}</b></td>
+      <td style="font-size:12px;color:var(--muted)">${r.applied_on}</td>
+      <td><button class="btn-sm btn-review" onclick="openModal('${r.leave_id}')">Review</button></td>
+    </tr>`).join('');
+}
+
+/* ─── ALL LEAVES (admin) ─── */
+async function loadAll() {
+  const r = await fetch('/leave/api/all_leaves');
+  const d = await r.json();
+  if (d.success) allData = d.leaves;
+  renderAll();
+}
+
+function renderAll() {
+  const srch = (document.getElementById('srch').value || '').toLowerCase();
+  const f    = document.getElementById('all-filter').value;
+  const data = allData.filter(r => {
+    const ms = !srch || r.student_name.toLowerCase().includes(srch) || r.student_id.toLowerCase().includes(srch);
+    const mf = !f || r.status === f;
+    return ms && mf;
+  });
+  const tb = document.getElementById('tb-all');
+  if (!data.length) { tb.innerHTML = emptyRow(9, 'No applications found.'); return; }
+  tb.innerHTML = data.map(r => `
+    <tr>
+      <td><span class="lid-tag">${r.leave_id}</span></td>
+      <td class="student-cell">
+        <div class="sname">${r.student_name}</div>
+        <div class="sid">${r.student_id}</div>
+      </td>
+      <td>${r.class || '—'}</td>
+      <td>${r.leave_type}</td>
+      <td>${r.from_date}</td>
+      <td>${r.to_date}</td>
+      <td><b>${r.days}</b></td>
+      <td>${pill(r.status)}</td>
+      <td>${r.status === 'Pending'
+        ? `<button class="btn-sm btn-review"  onclick="openModal('${r.leave_id}')">Review</button>`
+        : `<button class="btn-sm btn-details" onclick="openModal('${r.leave_id}')">Details</button>`}</td>
+    </tr>`).join('');
+}
+
+/* ─── STUDENT SUMMARY (admin) ─── */
+async function loadSummary() {
+  const r = await fetch('/leave/api/student_summary');
+  const d = await r.json();
+  if (!d.success) return;
+  const tb = document.getElementById('tb-summary');
+  if (!d.summary.length) { tb.innerHTML = emptyRow(7, 'No data yet.'); return; }
+  tb.innerHTML = d.summary.map(s => `
+    <tr>
+      <td><span class="lid-tag">${s.student_id}</span></td>
+      <td><b>${s.name}</b></td>
+      <td>${s.total}</td>
+      <td>${s.pending  > 0 ? `<span style="color:var(--amber);font-weight:700">${s.pending}</span>`  : s.pending}</td>
+      <td>${s.approved > 0 ? `<span style="color:var(--sage);font-weight:700">${s.approved}</span>` : s.approved}</td>
+      <td>${s.rejected > 0 ? `<span style="color:var(--rose);font-weight:700">${s.rejected}</span>` : s.rejected}</td>
+      <td><b>${s.total_days}</b> days</td>
+    </tr>`).join('');
+}
+
+/* ─── MODAL ─── */
+function openModal(lid) {
+  const r = allData.find(x => x.leave_id === lid);
+  if (!r) return;
+  activeLid = lid;
+
+  document.getElementById('m-lid-sub').textContent    = lid;
+  document.getElementById('m-student').textContent    = `${r.student_name} (${r.student_id})`;
+  document.getElementById('m-class').textContent      = r.class || '—';
+  document.getElementById('m-type').textContent       = r.leave_type;
+  document.getElementById('m-status').innerHTML       = pill(r.status);
+  document.getElementById('m-from').textContent       = r.from_date;
+  document.getElementById('m-to').textContent         = r.to_date;
+  document.getElementById('m-days').textContent       = r.days + ' day(s)';
+  document.getElementById('m-applied').textContent    = r.applied_on;
+  document.getElementById('m-reason').textContent     = r.reason;
+
+  // Show existing remarks if reviewed
+  const rmWrap = document.getElementById('m-remarks-wrap');
+  if (r.status !== 'Pending' && r.remarks && r.remarks !== '—') {
+    document.getElementById('m-remarks-val').textContent = r.remarks;
+    rmWrap.style.display = '';
+  } else {
+    rmWrap.style.display = 'none';
+  }
+
+  const reviewSection = document.getElementById('m-review-section');
+  const divider       = document.getElementById('m-divider');
+  const isPending     = r.status === 'Pending';
+  reviewSection.style.display = isPending ? '' : 'none';
+  divider.style.display       = isPending ? '' : 'none';
+
+  if (isPending) document.getElementById('m-remarks').value = '';
+
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+async function review(action) {
+  const remarks = document.getElementById('m-remarks').value.trim();
+  const r = await api('/leave/api/review', { leave_id: activeLid, action, remarks });
+  if (r.success) {
+    toast(r.message, action === 'Approved' ? 'success' : 'warn');
+    closeModal();
+    loadDashboard();
+    const pg = document.querySelector('.page.active');
+    if (pg && pg.id === 'pg-all') loadAll();
+  } else {
+    toast(r.message || 'Review failed.', 'error');
+  }
+}
+
+/* ─── HELPERS ─── */
+function pill(status) {
+  const cls = status === 'Approved' ? 'pill-approved' : status === 'Rejected' ? 'pill-rejected' : 'pill-pending';
+  return `<span class="pill ${cls}">${status}</span>`;
+}
+
+function emptyRow(cols, msg) {
+  return `<tr><td colspan="${cols}"><div class="empty">
+    <span class="emo">📭</span><p>${msg}</p></div></td></tr>`;
+}
+
+async function api(url, body) {
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  return r.json();
+}
+
+/* ─── TOAST ─── */
+function toast(msg, type = 'success') {
+  const icons = { success: '✓', error: '✗', warn: '⚠' };
+  const el = document.createElement('div');
+  el.className = `toast ${type === 'warn' ? 'warn' : type}`;
+  el.innerHTML = `<span style="font-size:16px">${icons[type] || '✓'}</span> ${msg}`;
+  document.getElementById('toastStack').appendChild(el);
+  setTimeout(() => el.style.opacity = '0', 3500);
+  setTimeout(() => el.remove(), 3800);
+}
+
+/* ─── SESSION CHECK ON LOAD ─── */
+(async () => {
+  try {
+    const r = await fetch('/leave/api/auth/me');
+    const d = await r.json();
+    if (d.logged_in) bootApp(d);
+  } catch (_) {}
+})();
+</script>
+</body>
+</html>

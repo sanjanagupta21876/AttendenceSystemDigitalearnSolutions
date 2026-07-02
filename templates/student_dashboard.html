@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ session.csrf_token }}">
+    <script>
+        (function() {
+            const originalFetch = window.fetch;
+            window.fetch = async function(url, options = {}) {
+                if (options.method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(options.method.toUpperCase())) {
+                    options.headers = options.headers || {};
+                    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                    if (token) {
+                        options.headers['X-CSRFToken'] = token;
+                    }
+                }
+                return originalFetch(url, options);
+            };
+        })();
+    </script>
+    <title>Student Dashboard - AttendanceMS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f0f2f6;
+            --card-bg: #ffffff;
+            --card-border: #dde3ed;
+            --accent: #1d6fa6;
+            --accent-hover: #132e4a;
+            --accent-glow: rgba(29, 111, 166, 0.15);
+            --green: #059669;
+            --green-glow: rgba(5, 150, 105, 0.15);
+            --amber: #d97706;
+            --amber-glow: rgba(217, 119, 6, 0.15);
+            --red: #dc2626;
+            --text-light: #111827;
+            --text-muted: #6b7280;
+            --sidebar-w: 240px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-light);
+            min-height: 100vh;
+            display: flex;
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            width: var(--sidebar-w);
+            background: #0d1b2a;
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 100;
+        }
+
+        .sidebar-brand {
+            padding: 30px 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .brand-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--accent), #132E4A);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .brand-icon svg {
+            width: 16px;
+            height: 16px;
+            fill: none;
+            stroke: white;
+            stroke-width: 2;
+        }
+
+        .brand-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .sidebar-nav {
+            padding: 24px 12px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: rgba(255, 255, 255, 0.5);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 14px;
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .nav-link.active {
+            background: rgba(29, 111, 166, 0.2);
+            border-left: 3px solid var(--accent);
+        }
+
+        .sidebar-footer {
+            padding: 24px 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .btn-logout {
+            width: 100%;
+            padding: 10px;
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            color: #fca5a5;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-logout:hover {
+            background: rgba(239, 68, 68, 0.25);
+        }
+
+        /* Main Workspace Area */
+        .main-content {
+            margin-left: var(--sidebar-w);
+            flex: 1;
+            padding: 40px;
+            max-width: 1200px;
+            width: calc(100% - var(--sidebar-w));
+        }
+
+        .header {
+            margin-bottom: 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title h2 {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-light);
+        }
+
+        .header-title p {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .date-badge {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-muted);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        /* Grid System */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr;
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        @media (max-width: 900px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Glass Cards */
+        .glass-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            padding: 28px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        .card-title {
+            font-size: 17px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-light);
+        }
+
+        .card-title svg {
+            width: 18px;
+            height: 18px;
+            stroke: var(--accent);
+            fill: none;
+            stroke-width: 2;
+        }
+
+        /* Profile Details Layout */
+        .profile-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+        }
+
+        .profile-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .profile-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .profile-value {
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--text-light);
+        }
+
+        .profile-value.highlight {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        /* Attendance Status Display */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge.loggedin {
+            background: rgba(29, 111, 166, 0.08);
+            color: var(--accent);
+            border: 1px solid rgba(29, 111, 166, 0.2);
+        }
+
+        .status-badge.present {
+            background: rgba(16, 185, 129, 0.08);
+            color: var(--green);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .status-badge.late {
+            background: rgba(245, 158, 11, 0.08);
+            color: var(--amber);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .status-badge.absent {
+            background: rgba(239, 68, 68, 0.08);
+            color: var(--red);
+            border: 1px solid rgba(239, 68, 68, 0.15);
+        }
+
+        /* Action Buttons */
+        .action-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+        }
+
+        .btn-large {
+            width: 100%;
+            max-width: 280px;
+            padding: 20px;
+            font-size: 18px;
+            font-weight: 700;
+            border: none;
+            border-radius: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            font-family: inherit;
+        }
+
+        .btn-checkin {
+            background: linear-gradient(135deg, var(--accent) 0%, #132e4a 100%);
+            color: white;
+            box-shadow: 0 4px 15px var(--accent-glow);
+        }
+
+        .btn-checkin:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(29, 111, 166, 0.35);
+        }
+
+        .btn-checkout {
+            background: linear-gradient(135deg, var(--green) 0%, #047857 100%);
+            color: white;
+            box-shadow: 0 4px 15px var(--green-glow);
+        }
+
+        .btn-checkout:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(5, 150, 105, 0.3);
+        }
+
+        .btn-large:active {
+            transform: translateY(0);
+        }
+
+        .btn-large:disabled {
+            background: #e2e8f0;
+            border: 1px solid var(--card-border);
+            color: var(--text-muted);
+            box-shadow: none;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Modal styling */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-box {
+            background: #ffffff;
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            width: 440px;
+            max-width: 90vw;
+            padding: 32px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+            animation: modalFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            color: var(--text-light);
+        }
+
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .modal-desc {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 11.5px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .form-select, .form-input, .form-textarea {
+            width: 100%;
+            background: #f8fafc;
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 12px;
+            color: var(--text-light);
+            font-family: inherit;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .form-select:focus, .form-input:focus, .form-textarea:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px var(--accent-glow);
+            background: #ffffff;
+        }
+
+        .form-select option {
+            background-color: #ffffff;
+            color: var(--text-light);
+        }
+
+        .modal-btns {
+            display: flex;
+            gap: 12px;
+            margin-top: 28px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        .btn-cancel {
+            background: #f1f5f9;
+            color: var(--text-light);
+            border: 1px solid var(--card-border);
+        }
+
+        .btn-cancel:hover {
+            background: #e2e8f0;
+        }
+
+        .btn-confirm {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-confirm:hover {
+            background: var(--accent-hover);
+        }
+
+        /* Panels switcher */
+        .panel {
+            display: none;
+            animation: panelIn 0.3s ease;
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        @keyframes panelIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Leave applications table styles */
+        .table-card {
+            margin-top: 24px;
+            overflow: hidden;
+        }
+
+        .tbl-scroll {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th {
+            padding: 12px 18px;
+            background: #f8fafc;
+            border-bottom: 1px solid var(--card-border);
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 16px 18px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 14px;
+            color: var(--text-light);
+        }
+
+        tbody tr:hover td {
+            background: #f8fafc;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        /* Notification */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: #ffffff;
+            border-left: 4px solid var(--accent);
+            border-radius: 8px;
+            padding: 16px 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            z-index: 2000;
+            transform: translateY(120px);
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            max-width: 320px;
+            color: var(--text-light);
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.success { border-left-color: var(--green); }
+        .toast.error { border-left-color: var(--red); }
+        .toast.warning { border-left-color: var(--amber); }
+
+        .toast-title { font-weight: 700; font-size: 14px; }
+        .toast-msg { font-size: 13px; color: var(--text-muted); }
+    </style>
+</head>
+<body>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-icon">
+                <svg viewBox="0 0 24 24">
+                    <rect x="3" y="4" width="18" height="18" rx="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+            </div>
+            <span class="brand-name">AttendanceMS</span>
+        </div>
+
+        <nav class="sidebar-nav">
+            <a href="#" class="nav-link active" onclick="switchPanel('dashboard', this)">
+                <span>⏱️</span> Dashboard
+            </a>
+            <a href="#" class="nav-link" onclick="switchPanel('leaves', this)">
+                <span>📝</span> Leave Requests
+            </a>
+            <a href="/change-password" class="nav-link">
+                <span>🔑</span> Change Password
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <button class="btn-logout" onclick="logout()">Sign Out</button>
+        </div>
+    </aside>
+
+    <!-- MAIN AREA -->
+    <main class="main-content">
+        <!-- HEADER -->
+        <header class="header">
+            <div class="header-title">
+                <h2 id="welcomeText">Welcome Back</h2>
+                <p>Track your daily login and manage applications</p>
+            </div>
+            <div class="date-badge" id="currentDate">-- --, ----</div>
+        </header>
+
+        <!-- DASHBOARD PANEL -->
+        <div class="panel active" id="panel-dashboard">
+            <div class="dashboard-grid">
+                <!-- PERSONAL INFORMATION -->
+                <div class="glass-card">
+                    <div class="card-title">
+                        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                        Personal Profile & Today's Info
+                    </div>
+                    
+                    <div class="profile-grid">
+                        <div class="profile-item">
+                            <span class="profile-label">Name</span>
+                            <span class="profile-value" id="profileName">—</span>
+                        </div>
+                        <div class="profile-item">
+                            <span class="profile-label">Intern / ID</span>
+                            <span class="profile-value highlight" id="profileId">—</span>
+                        </div>
+                        <div class="profile-item">
+                            <span class="profile-label">Email Address</span>
+                            <span class="profile-value" id="profileEmail">—</span>
+                        </div>
+                        <div class="profile-item">
+                            <span class="profile-label">Domain</span>
+                            <span class="profile-value" id="profileDomain">—</span>
+                        </div>
+                        <div class="profile-item" style="grid-column: 1 / -1; margin-top: 10px;">
+                            <span class="profile-label">Today's Attendance Status</span>
+                            <div style="margin-top: 4px;">
+                                <span class="status-badge" id="profileStatusBadge">—</span>
+                            </div>
+                        </div>
+                        <div class="profile-item" style="grid-column: 1 / -1; margin-top: 15px;">
+                            <a href="/change-password" style="text-decoration: none; display: inline-flex; align-items: center; gap: 8px; color: var(--accent); font-size: 13.5px; font-weight: 600; width: max-content; transition: all 0.2s;" onmouseover="this.style.color='var(--accent-hover)'" onmouseout="this.style.color='var(--accent)'">
+                                🔑 Change Password
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ATTENDANCE RECORDING ACTIONS -->
+                <div class="glass-card" style="display: flex; flex-direction: column; justify-content: center;">
+                    <div class="card-title">
+                        <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        Action Panel
+                    </div>
+                    <div class="action-container">
+                        <button class="btn-large btn-checkin" id="btnCheckIn" onclick="showCheckInModal()">
+                            Check In
+                        </button>
+                        <button class="btn-large btn-checkout" id="btnCheckOut" onclick="handleCheckOut()" disabled>
+                            Check Out
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TODAY'S ATTENDANCE STATUS DETAILS -->
+            <div class="glass-card">
+                <div class="card-title">
+                    <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    Today's Attendance Status Details
+                </div>
+                <div class="profile-grid">
+                    <div class="profile-item">
+                        <span class="profile-label">Check-In Time</span>
+                        <span class="profile-value" id="checkInTime">—</span>
+                    </div>
+                    <div class="profile-item">
+                        <span class="profile-label">Check-Out Time</span>
+                        <span class="profile-value" id="checkOutTime">—</span>
+                    </div>
+                    <div class="profile-item">
+                        <span class="profile-label">Working Hours</span>
+                        <span class="profile-value" id="workingHours">—</span>
+                    </div>
+                    <div class="profile-item">
+                        <span class="profile-label">Active Domain Recorded</span>
+                        <span class="profile-value" id="activeDomain">—</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- LEAVE REQUESTS PANEL -->
+        <div class="panel" id="panel-leaves">
+            <div class="dashboard-grid">
+                <!-- Apply for Leave form -->
+                <div class="glass-card">
+                    <div class="card-title">
+                        <span>✏️</span> Apply for Leave
+                    </div>
+                    <form id="leaveForm" onsubmit="handleLeaveSubmit(event)">
+                        <div class="form-group">
+                            <label class="form-label">Leave Type</label>
+                            <select class="form-select" id="leaveType" required>
+                                <option value="">Select type...</option>
+                                <option value="Medical Leave">🏥 Medical Leave</option>
+                                <option value="Personal Leave">🙋 Personal Leave</option>
+                                <option value="Family Emergency">🏠 Family Emergency</option>
+                                <option value="Academic Leave">🎓 Academic Leave</option>
+                                <option value="Other">📝 Other</option>
+                            </select>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                            <div class="form-group">
+                                <label class="form-label">From Date</label>
+                                <input type="date" class="form-input" id="leaveFrom" required onchange="calcLeaveDays()">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">To Date</label>
+                                <input type="date" class="form-input" id="leaveTo" required onchange="calcLeaveDays()">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" id="lblLeaveDays">Duration: —</label>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Reason</label>
+                            <textarea class="form-textarea" id="leaveReason" rows="3" placeholder="Provide reason details..." required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-confirm" style="width: 100%; padding: 14px;">Submit Leave Application</button>
+                    </form>
+                </div>
+
+                <!-- Leave Summary Statistics -->
+                <div class="glass-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+                    <div>
+                        <div class="card-title">
+                            <span>📊</span> Leave Application Rules
+                        </div>
+                        <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
+                            1. All leave requests are subject to approval by the administrator.<br>
+                            2. Once approved, the attendance record for the respective days will automatically show <strong>On Leave</strong> instead of Absent.<br>
+                            3. Ensure to apply at least 24 hours in advance except in emergency situations.
+                        </p>
+                    </div>
+                    <div style="border-top: 1px solid var(--card-border); padding-top: 20px;">
+                        <span class="profile-label">Total Days Approved</span>
+                        <div style="font-size: 36px; font-weight: 700; color: var(--green); margin-top: 4px;" id="totalApprovedLeaves">0 Days</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MY LEAVE HISTORY -->
+            <div class="glass-card table-card">
+                <div class="card-title">
+                    <span>📄</span> My Leave Applications
+                </div>
+                <div class="tbl-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Leave ID</th>
+                                <th>Type</th>
+                                <th>From</th>
+                                <th>To</th>
+                                <th>Days</th>
+                                <th>Status</th>
+                                <th>Admin Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leavesTableBody">
+                            <tr>
+                                <td colspan="7" class="empty-state">No leave applications found.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- CHECK IN CATEGORY MODAL -->
+    <div class="modal-overlay" id="checkInModal">
+        <div class="modal-box">
+            <h3 class="modal-title">Attendance Check-In</h3>
+            <p class="modal-desc">Please select your active internship domain for today's check-in record.</p>
+            
+            <div class="form-group">
+                <label class="form-label">Internship Domain</label>
+                <select class="form-select" id="checkInDomain" onchange="toggleCustomDomainInput()">
+                    <option value="Data Analyst Intern">Data Analyst Intern</option>
+                    <option value="HR Intern">HR Intern</option>
+                    <option value="Cyber Security Intern">Cyber Security Intern</option>
+                    <option value="AI/ML Intern">AI/ML Intern</option>
+                    <option value="Web Development Intern">Web Development Intern</option>
+                    <option value="App Development Intern">App Development Intern</option>
+                    <option value="UI/UX Intern">UI/UX Intern</option>
+                    <option value="Marketing Intern">Marketing Intern</option>
+                    <option value="Finance Intern">Finance Intern</option>
+                    <option value="Other">Other (Custom Input)</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="customDomainGroup" style="display: none;">
+                <label class="form-label">Enter Custom Domain Name</label>
+                <input type="text" class="form-input" id="customDomain" placeholder="e.g. Content Writer Intern">
+            </div>
+
+            <div class="modal-btns">
+                <button class="btn btn-cancel" onclick="closeCheckInModal()">Cancel</button>
+                <button class="btn btn-confirm" onclick="handleCheckInSubmit()">Confirm Check-In</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATIONS -->
+    <div class="toast" id="toastBox">
+        <div class="toast-title" id="toastTitle">Notification</div>
+        <div class="toast-msg" id="toastMsg">Message details.</div>
+    </div>
+
+    <script>
+        // STATE
+        let studentData = null;
+
+        // INIT
+        document.addEventListener('DOMContentLoaded', () => {
+            tickDate();
+            loadProfileData();
+        });
+
+        function tickDate() {
+            const dateObj = new Date();
+            document.getElementById('currentDate').innerText = dateObj.toLocaleDateString('en-GB', {
+                day: '2-digit', month: 'short', year: 'numeric'
+            });
+        }
+
+        function notify(title, msg, type = 'success') {
+            const toast = document.getElementById('toastBox');
+            document.getElementById('toastTitle').innerText = title;
+            document.getElementById('toastMsg').innerText = msg;
+            toast.className = `toast show ${type}`;
+            clearTimeout(toast._t);
+            toast._t = setTimeout(() => toast.classList.remove('show'), 4000);
+        }
+
+        function switchPanel(name, btn) {
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+            
+            document.getElementById(`panel-${name}`).classList.add('active');
+            if (btn) btn.classList.add('active');
+
+            if (name === 'leaves') {
+                loadLeaveData();
+            } else if (name === 'dashboard') {
+                loadProfileData();
+            }
+        }
+
+        async function loadProfileData() {
+            try {
+                const response = await fetch('/api/auth/me');
+                const data = await response.json();
+                
+                if (data.logged_in && data.role === 'student') {
+                    studentData = data;
+                    document.getElementById('welcomeText').innerText = `Welcome Back, ${data.name}!`;
+                    document.getElementById('profileName').innerText = data.name;
+                    document.getElementById('profileId').innerText = data.id;
+                    document.getElementById('profileEmail').innerText = data.email;
+                    document.getElementById('profileDomain').innerText = data.department || '—';
+
+                    // Fetch today's attendance details
+                    loadTodayAttendance();
+                } else {
+                    window.location.href = '/login';
+                }
+            } catch (err) {
+                console.error(err);
+                notify('Error', 'Failed to fetch profile information.', 'error');
+            }
+        }
+
+        async function loadTodayAttendance() {
+            try {
+                const response = await fetch('/api/student/attendance');
+                const data = await response.json();
+                
+                if (data.success) {
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    const todayRecord = data.records.find(r => r.date === todayStr);
+
+                    const badge = document.getElementById('profileStatusBadge');
+                    const btnIn = document.getElementById('btnCheckIn');
+                    const btnOut = document.getElementById('btnCheckOut');
+
+                    if (todayRecord) {
+                        document.getElementById('checkInTime').innerText = todayRecord.check_in || '—';
+                        document.getElementById('checkOutTime').innerText = todayRecord.check_out || '—';
+                        document.getElementById('workingHours').innerText = todayRecord.working_hours ? `${todayRecord.working_hours.toFixed(2)} hrs` : '—';
+                        document.getElementById('activeDomain').innerText = todayRecord.internship_domain || '—';
+
+                        badge.innerText = todayRecord.status;
+                        if (todayRecord.status === 'Logged In') {
+                            badge.className = 'status-badge loggedin';
+                            btnIn.disabled = true;
+                            btnOut.disabled = false;
+                        } else if (todayRecord.status === 'Present') {
+                            badge.className = 'status-badge present';
+                            btnIn.disabled = true;
+                            btnOut.disabled = true;
+                        } else if (todayRecord.status === 'Late') {
+                            // Can be checked in only or completed
+                            if (todayRecord.check_out && todayRecord.check_out !== '—') {
+                                badge.className = 'status-badge present';
+                                btnIn.disabled = true;
+                                btnOut.disabled = true;
+                            } else {
+                                badge.className = 'status-badge late';
+                                btnIn.disabled = true;
+                                btnOut.disabled = false;
+                            }
+                        } else if (todayRecord.status === 'On Leave') {
+                            badge.className = 'status-badge onleave';
+                            btnIn.disabled = true;
+                            btnOut.disabled = true;
+                        } else {
+                            badge.className = 'status-badge absent';
+                            btnIn.disabled = true;
+                            btnOut.disabled = true;
+                        }
+                    } else {
+                        // Not logged in yet
+                        badge.innerText = 'Not Marked';
+                        badge.className = 'status-badge absent';
+                        btnIn.disabled = false;
+                        btnOut.disabled = true;
+                        
+                        document.getElementById('checkInTime').innerText = '—';
+                        document.getElementById('checkOutTime').innerText = '—';
+                        document.getElementById('workingHours').innerText = '—';
+                        document.getElementById('activeDomain').innerText = '—';
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Check In modal
+        function showCheckInModal() {
+            document.getElementById('checkInModal').style.display = 'flex';
+        }
+
+        function closeCheckInModal() {
+            document.getElementById('checkInModal').style.display = 'none';
+        }
+
+        function toggleCustomDomainInput() {
+            const select = document.getElementById('checkInDomain');
+            const customGroup = document.getElementById('customDomainGroup');
+            customGroup.style.display = select.value === 'Other' ? 'block' : 'none';
+        }
+
+        async function handleCheckInSubmit() {
+            const select = document.getElementById('checkInDomain');
+            let domain = select.value;
+            if (domain === 'Other') {
+                const customInput = document.getElementById('customDomain').value.trim();
+                if (!customInput) {
+                    notify('Validation Error', 'Please specify your custom domain name.', 'warning');
+                    return;
+                }
+                domain = customInput;
+            }
+
+            try {
+                const response = await fetch('/api/student/check-in', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ internship_domain: domain })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    notify('Checked In', data.message, 'success');
+                    closeCheckInModal();
+                    loadProfileData();
+                } else {
+                    notify('Check-In Failed', data.message, 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                notify('Error', 'Server connection failed.', 'error');
+            }
+        }
+
+        async function handleCheckOut() {
+            if (!confirm("Are you sure you want to Check Out? This will complete your attendance log for today.")) return;
+            
+            try {
+                const response = await fetch('/api/student/check-out', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    notify('Checked Out', data.message, 'success');
+                    loadProfileData();
+                } else {
+                    notify('Check-Out Failed', data.message, 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                notify('Error', 'Server connection failed.', 'error');
+            }
+        }
+
+        // LEAVE MANAGEMENT
+        function calcLeaveDays() {
+            const from = document.getElementById('leaveFrom').value;
+            const to = document.getElementById('leaveTo').value;
+            const lbl = document.getElementById('lblLeaveDays');
+
+            if (from && to) {
+                const fDate = new Date(from);
+                const tDate = new Date(to);
+                if (fDate > tDate) {
+                    lbl.innerText = "Error: Invalid date range";
+                    lbl.style.color = "var(--red)";
+                    return;
+                }
+                const diffTime = Math.abs(tDate - fDate);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                lbl.innerText = `Duration: ${diffDays} day(s)`;
+                lbl.style.color = "var(--text-light)";
+            } else {
+                lbl.innerText = "Duration: —";
+            }
+        }
+
+        async function handleLeaveSubmit(event) {
+            event.preventDefault();
+            const leaveType = document.getElementById('leaveType').value;
+            const fromDate = document.getElementById('leaveFrom').value;
+            const toDate = document.getElementById('leaveTo').value;
+            const reason = document.getElementById('leaveReason').value.trim();
+
+            if (new Date(fromDate) > new Date(toDate)) {
+                notify('Validation Error', 'From date cannot be after To date.', 'warning');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/student/leave/apply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ leave_type: leaveType, from_date: fromDate, to_date: toDate, reason })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    notify('Application Submitted', 'Your leave request has been submitted for review.', 'success');
+                    document.getElementById('leaveForm').reset();
+                    document.getElementById('lblLeaveDays').innerText = "Duration: —";
+                    loadLeaveData();
+                } else {
+                    notify('Submission Failed', data.message, 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                notify('Error', 'Server error applying for leave.', 'error');
+            }
+        }
+
+        async function loadLeaveData() {
+            try {
+                const response = await fetch('/api/student/leave/my_leaves');
+                const data = await response.json();
+
+                if (data.success) {
+                    const tbody = document.getElementById('leavesTableBody');
+                    if (data.leaves.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No leave applications found.</td></tr>';
+                        document.getElementById('totalApprovedLeaves').innerText = "0 Days";
+                        return;
+                    }
+
+                    let approvedDays = 0;
+                    tbody.innerHTML = data.leaves.map(l => {
+                        let statusClass = 'status-badge';
+                        if (l.status === 'Pending') statusClass += ' late';
+                        else if (l.status === 'Approved') {
+                            statusClass += ' present';
+                            approvedDays += parseInt(l.days) || 0;
+                        }
+                        else statusClass += ' absent';
+
+                        return `
+                            <tr>
+                                <td><span style="font-family: monospace; font-weight: 700;">${l.leave_id}</span></td>
+                                <td>${l.leave_type}</td>
+                                <td>${l.from_date}</td>
+                                <td>${l.to_date}</td>
+                                <td style="font-weight: 600;">${l.days}</td>
+                                <td><span class="${statusClass}">${l.status}</span></td>
+                                <td style="color: var(--text-muted); font-size: 13px;">${l.remarks || '—'}</td>
+                            </tr>
+                        `;
+                    }).join('');
+
+                    document.getElementById('totalApprovedLeaves').innerText = `${approvedDays} Day(s)`;
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+                window.location.href = '/login';
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    </script>
+</body>
+</html>
